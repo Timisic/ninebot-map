@@ -1,0 +1,393 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ride-dataset:v1",
+  "title": "Ride Dataset v1",
+  "description": "Provider-independent ride statistics and explicitly scoped map tracks. Cross-record invariants are checked by nbmap.dataset.validate_dataset.",
+  "type": "object",
+  "required": [
+    "format",
+    "schema_version",
+    "dataset_id",
+    "generated_at",
+    "timezone",
+    "coordinate_system",
+    "selection",
+    "provenance",
+    "rides",
+    "tracks",
+    "months",
+    "summary"
+  ],
+  "properties": {
+    "format": {
+      "const": "ride-dataset"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "dataset_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "(Z|[+-]\\d{2}:\\d{2})$"
+    },
+    "timezone": {
+      "type": "string"
+    },
+    "coordinate_system": {
+      "enum": [
+        "unverified",
+        "wgs84",
+        "gcj02",
+        "bd09"
+      ]
+    },
+    "selection": {
+      "type": "object",
+      "required": [
+        "statistics_scope",
+        "map_from",
+        "map_rule",
+        "allowed_track_kinds"
+      ],
+      "properties": {
+        "statistics_scope": {
+          "const": "all_rides"
+        },
+        "map_from": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "pattern": "(Z|[+-]\\d{2}:\\d{2})$"
+        },
+        "map_rule": {
+          "const": "ride_start_at_or_after"
+        },
+        "allowed_track_kinds": {
+          "const": [
+            "sampled"
+          ]
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "required": [
+        "source",
+        "snapshot_ids"
+      ],
+      "properties": {
+        "source": {
+          "type": "string"
+        },
+        "snapshot_ids": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "month",
+              "snapshot_id"
+            ],
+            "properties": {
+              "month": {
+                "type": "string",
+                "pattern": "^20\\d{2}(0[1-9]|1[0-2])$"
+              },
+              "snapshot_id": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "rides": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/ride"
+      }
+    },
+    "tracks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "ride_id",
+          "points"
+        ],
+        "properties": {
+          "ride_id": {
+            "type": "string"
+          },
+          "points": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "$ref": "#/$defs/point"
+            }
+          }
+        }
+      }
+    },
+    "months": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/month"
+      }
+    },
+    "summary": {
+      "$ref": "#/$defs/summary"
+    }
+  },
+  "$defs": {
+    "ride": {
+      "type": "object",
+      "required": [
+        "id",
+        "source_month",
+        "started_at",
+        "ended_at",
+        "distance_m",
+        "duration_s",
+        "energy_wh",
+        "track_kind",
+        "source_point_count",
+        "map_status"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_month": {
+          "type": "string",
+          "pattern": "^20\\d{2}(0[1-9]|1[0-2])$"
+        },
+        "started_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "pattern": "(Z|[+-]\\d{2}:\\d{2})$"
+        },
+        "ended_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "pattern": "(Z|[+-]\\d{2}:\\d{2})$"
+        },
+        "distance_m": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "duration_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "energy_wh": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "track_kind": {
+          "enum": [
+            "sampled",
+            "simplified",
+            "single_point",
+            "missing"
+          ]
+        },
+        "source_point_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "map_status": {
+          "enum": [
+            "included",
+            "before_map_start",
+            "unknown_start_time",
+            "simplified",
+            "insufficient_points"
+          ]
+        }
+      }
+    },
+    "point": {
+      "type": "object",
+      "required": [
+        "sequence",
+        "longitude",
+        "latitude",
+        "recorded_at",
+        "speed_mps"
+      ],
+      "properties": {
+        "sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "longitude": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        "latitude": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "recorded_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time",
+          "pattern": "(Z|[+-]\\d{2}:\\d{2})$"
+        },
+        "speed_mps": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    },
+    "month": {
+      "type": "object",
+      "required": [
+        "month",
+        "reported_ride_count",
+        "reported_distance_m",
+        "listed_ride_count",
+        "listed_distance_m",
+        "list_complete"
+      ],
+      "properties": {
+        "month": {
+          "type": "string",
+          "pattern": "^20\\d{2}(0[1-9]|1[0-2])$"
+        },
+        "reported_ride_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "reported_distance_m": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "listed_ride_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "listed_distance_m": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "list_complete": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": [
+        "ride_count",
+        "total_distance_m",
+        "known_distance_m",
+        "missing_distance_count",
+        "reported_month_distance_m",
+        "map_ride_count",
+        "map_distance_m",
+        "map_point_count",
+        "map_exclusions"
+      ],
+      "properties": {
+        "ride_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "total_distance_m": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "known_distance_m": {
+          "type": "number",
+          "minimum": 0
+        },
+        "missing_distance_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reported_month_distance_m": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "map_ride_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "map_distance_m": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "map_point_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "map_exclusions": {
+          "type": "object",
+          "propertyNames": {
+            "enum": [
+              "before_map_start",
+              "unknown_start_time",
+              "simplified",
+              "insufficient_points"
+            ]
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    }
+  }
+}

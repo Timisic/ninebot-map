@@ -1,0 +1,8 @@
+#!/bin/bash
+set -euo pipefail
+cd "$(dirname "$0")"
+umask 077
+if [[ ! -x .venv/bin/python ]]; then
+  ./scripts/setup.sh
+fi
+exec .venv/bin/python -m nbmap "$@"

@@ -1,0 +1,116 @@
+{
+  "format": "ride-dataset",
+  "schema_version": 1,
+  "dataset_id": "synthetic-example",
+  "generated_at": "2026-08-01T00:00:00+00:00",
+  "timezone": "Asia/Shanghai",
+  "coordinate_system": "unverified",
+  "selection": {
+    "statistics_scope": "all_rides",
+    "map_from": "2026-07-06T19:20:00+08:00",
+    "map_rule": "ride_start_at_or_after",
+    "allowed_track_kinds": [
+      "sampled"
+    ]
+  },
+  "provenance": {
+    "source": "synthetic_example_not_real_rides",
+    "snapshot_ids": []
+  },
+  "rides": [
+    {
+      "id": "r_d3276c8d9d0fd459188f9f0f",
+      "source_month": "202607",
+      "started_at": null,
+      "ended_at": null,
+      "distance_m": null,
+      "duration_s": 60.0,
+      "energy_wh": null,
+      "track_kind": "sampled",
+      "source_point_count": 2,
+      "map_status": "unknown_start_time"
+    },
+    {
+      "id": "r_38e4a50b3ac6c9f089a0afac",
+      "source_month": "202607",
+      "started_at": "2026-07-06T09:00:00+08:00",
+      "ended_at": "2026-07-06T09:01:00+08:00",
+      "distance_m": 1000.0,
+      "duration_s": 60.0,
+      "energy_wh": null,
+      "track_kind": "sampled",
+      "source_point_count": 2,
+      "map_status": "before_map_start"
+    },
+    {
+      "id": "r_3975e4dcc95ecfeb93edb3ce",
+      "source_month": "202607",
+      "started_at": "2026-07-06T20:40:00+08:00",
+      "ended_at": "2026-07-06T20:41:00+08:00",
+      "distance_m": 2000.0,
+      "duration_s": 60.0,
+      "energy_wh": null,
+      "track_kind": "sampled",
+      "source_point_count": 2,
+      "map_status": "included"
+    },
+    {
+      "id": "r_e6816574243c869254fe1eed",
+      "source_month": "202607",
+      "started_at": "2026-07-06T21:00:00+08:00",
+      "ended_at": "2026-07-06T21:01:00+08:00",
+      "distance_m": 3000.0,
+      "duration_s": 60.0,
+      "energy_wh": null,
+      "track_kind": "simplified",
+      "source_point_count": 2,
+      "map_status": "simplified"
+    }
+  ],
+  "tracks": [
+    {
+      "ride_id": "r_3975e4dcc95ecfeb93edb3ce",
+      "points": [
+        {
+          "sequence": 0,
+          "longitude": 116.0,
+          "latitude": 39,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 1,
+          "longitude": 116.001,
+          "latitude": 39,
+          "recorded_at": null,
+          "speed_mps": null
+        }
+      ]
+    }
+  ],
+  "months": [
+    {
+      "month": "202607",
+      "reported_ride_count": 4,
+      "reported_distance_m": 6000.0,
+      "listed_ride_count": 4,
+      "listed_distance_m": null,
+      "list_complete": true
+    }
+  ],
+  "summary": {
+    "ride_count": 4,
+    "total_distance_m": null,
+    "known_distance_m": 6000.0,
+    "missing_distance_count": 1,
+    "reported_month_distance_m": 6000.0,
+    "map_ride_count": 1,
+    "map_distance_m": 2000.0,
+    "map_point_count": 2,
+    "map_exclusions": {
+      "before_map_start": 1,
+      "simplified": 1,
+      "unknown_start_time": 1
+    }
+  }
+}
