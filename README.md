@@ -49,3 +49,11 @@ cd ninebot-map
 - 兼容性受车型、地区及九号服务端变化影响；180 天内也不保证每条轨迹完整。
 
 [数据格式](docs/data-format.md) · [架构](docs/architecture.md) · [来源](docs/data-source.md) · [MIT License](LICENSE)
+
+<!-- ninebot-track-image:start -->
+
+## 骑行轨迹
+
+![无底图骑行轨迹](assets/ninebot-tracks.png)
+
+<!-- ninebot-track-image:end -->
