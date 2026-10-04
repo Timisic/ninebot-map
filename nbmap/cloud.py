@@ -251,7 +251,7 @@ def deploy_code(root, folder, repo, settings):
     workflows = folder / '.github/workflows'
     workflows.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(root / 'templates/cloud-sync.yml', workflows / 'sync.yml')
-    write_text(folder / '.gitignore', '.private/\ndata/\nwork/\n.venv/\n__pycache__/\n*.pyc\n*.key\n')
+    shutil.copyfile(root / '.gitignore', folder / '.gitignore')
     write_json(folder / 'sync-settings.json', settings)
     write_text(folder / 'README.md', '# Private ride sync\n\nCollector snapshot, encrypted checkpoint on the `state` branch, and image-only public publishing. Never change this repository to public.\n')
     keys = gh_json('api', 'meta')['ssh_keys']

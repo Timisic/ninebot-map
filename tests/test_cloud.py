@@ -168,6 +168,7 @@ class CloudTests(unittest.TestCase):
                          (source / '.agents/skills/verify-ninebot-map/SKILL.md').read_bytes())
         self.assertTrue((destination / 'docs/design/DESIGN.md').is_file())
         self.assertTrue((destination / 'schemas/ride-dataset-v1.schema.json').is_file())
+        self.assertEqual((destination / '.gitignore').read_bytes(), (source / '.gitignore').read_bytes())
         self.assertEqual(staged[0][:4], ['git', 'add', '--all', '--'])
         self.assertIn('CONTEXT.md', staged[0])
         self.assertIn('.agents', staged[0])
