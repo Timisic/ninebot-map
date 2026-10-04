@@ -242,10 +242,10 @@ def deploy_code(root, folder, repo, settings):
     if not (folder / '.git').exists():
         command(['git', 'init', '-b', 'main', str(folder)])
         command(['git', 'remote', 'add', 'origin', 'git@github.com:' + repo + '.git'], cwd=folder)
-    for name in ('pyproject.toml', 'uv.lock', 'LICENSE', 'run', 'package.json', 'package-lock.json', 'CONTEXT.md'):
+    for name in ('pyproject.toml', 'uv.lock', 'LICENSE', 'run', 'package.json', 'package-lock.json', 'AGENTS.md'):
         shutil.copyfile(root / name, folder / name)
     (folder / 'run').chmod(0o755)
-    for name in ('web', 'tests', 'docs', 'examples', 'scripts', 'templates'):
+    for name in ('web', 'tests', 'docs', 'examples', 'schemas', 'scripts', 'templates', '.agents'):
         shutil.copytree(root / name, folder / name, dirs_exist_ok=True, ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
     shutil.copytree(root / 'nbmap', folder / 'nbmap', dirs_exist_ok=True, ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
     workflows = folder / '.github/workflows'
@@ -257,9 +257,14 @@ def deploy_code(root, folder, repo, settings):
     keys = gh_json('api', 'meta')['ssh_keys']
     aliases = 'github.com,[github.com]:443,ssh.github.com,[ssh.github.com]:443'
     write_text(folder / 'github-known-hosts', ''.join(aliases + ' ' + key + '\n' for key in keys))
-    command(['git', 'add', '--', 'nbmap', '.github', '.gitignore', 'sync-settings.json', 'github-known-hosts', 'README.md',
-             'LICENSE', 'pyproject.toml', 'uv.lock', 'run', 'package.json', 'package-lock.json', 'CONTEXT.md',
-             'web', 'tests', 'docs', 'examples', 'scripts', 'templates'], cwd=folder)
+    obsolete = folder / 'CONTEXT.md'
+    obsolete.unlink(missing_ok=True)
+    paths = ['nbmap', '.github', '.gitignore', 'sync-settings.json', 'github-known-hosts', 'README.md',
+             'LICENSE', 'pyproject.toml', 'uv.lock', 'run', 'package.json', 'package-lock.json', 'AGENTS.md',
+             'web', 'tests', 'docs', 'examples', 'schemas', 'scripts', 'templates', '.agents']
+    if command(['git', 'ls-files', '--', 'CONTEXT.md'], cwd=folder).stdout:
+        paths.append('CONTEXT.md')
+    command(['git', 'add', '--all', '--', *paths], cwd=folder)
     if command(['git', 'diff', '--cached', '--quiet'], cwd=folder, check=False).returncode:
         command(['git', '-c', 'user.name=Ninebot Map Sync', '-c', 'user.email=sync@users.noreply.github.com',
                  'commit', '-m', 'Configure private ride sync and public image publishing'], cwd=folder)

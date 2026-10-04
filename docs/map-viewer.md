@@ -54,12 +54,14 @@
 ```bash
 .venv/bin/python -m unittest discover -s tests -q
 npm ci
-npm test
-npm run test:browser
-npm run test:wheel
+npm run verify:doctor
+npm run verify:smoke
+npm run verify
 ```
 
-浏览器验证默认使用本机安装的 Chrome。可设置 `PLAYWRIGHT_CHANNEL` 选择 Playwright 支持的其他已安装浏览器通道。脚本启动独立随机端口服务，只使用合成 fixture，验证桌面、小屏幕、筛选、名称持久化、无效导入、底图门禁和默认无外部网络请求。它还对 Canvas 像素检测重叠增亮，对实际颜色检测文字对比度。`npm run test:wheel` 使用合成数据检查连续滚轮输入、输入方向变化、缩放边界与视图切换后的缩放行为。设置 `MAP_SCREENSHOTS=/local/output/path` 可保存合成截图。
+浏览器验证默认使用本机安装的 Chrome。CI 使用 `PLAYWRIGHT_CHANNEL=chromium` 和 Playwright 管理的 Chromium。`npm run verify` 保存分项日志和结果，刷新验收另存动作记录与前后截图，并确认自己启动的服务已关闭。证据默认保存在忽略目录 `work/verification/`，也可用 `--output` 指定目录。
+
+可用 `npm run verify -- --suite map`、`--suite wheel` 或 `--suite refresh` 验证单项。脚本使用合成 fixture 和独立随机端口，覆盖桌面、小屏幕、筛选、名称持久化、无效导入与刷新、底图门禁、主题和缩放。网络瓦片在测试中模拟提供，滚轮输入也是合成事件；这些检查不验证真实瓦片可用性或实体触控板手感。Agent 的具体操作与完成条件见[项目验证技能](../.agents/skills/verify-ninebot-map/SKILL.md)。
 
 ## 参考机制
 
@@ -70,4 +72,4 @@ npm run test:wheel
 - dérive，MIT，提交 `8a9f7e44b9a239d93bda62324ca67e6316f1ff7e`，`src/map.js`。
 - running_page，MIT，提交 `a1ec93325066235b742aaf8ffa762b495aefc096`，`src/components/RouteMapCanvas.tsx`。
 
-视觉布局参考 OilUI / oil-ui 与 [Trail](https://ui.oiloil.org/works/trail/) 的紧凑控件、地图优先和低干扰方式，均为设计参考，未复制源码。图标是实际复用的 Lucide 固定子集（`lucide-static` 0.468.0，ISC），来源与许可保存在 `web/vendor/lucide/PROVENANCE.md` 和 `web/vendor/lucide/LICENSE`。当前视觉规则见 `DESIGN.md` 与 `.impeccable/design.json`。
+视觉布局参考 OilUI / oil-ui 与 [Trail](https://ui.oiloil.org/works/trail/) 的紧凑控件、地图优先和低干扰方式，均为设计参考，未复制源码。图标是实际复用的 Lucide 固定子集（`lucide-static` 0.468.0，ISC），来源与许可保存在 `web/vendor/lucide/PROVENANCE.md` 和 `web/vendor/lucide/LICENSE`。当前视觉规则见 [设计规范](design/DESIGN.md)与[设计预览](design/.impeccable/design.json)。

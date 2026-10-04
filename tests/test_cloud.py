@@ -3,6 +3,7 @@ import copy
 import io
 import tempfile
 import subprocess
+import sys
 import unittest
 from contextlib import redirect_stdout
 from datetime import datetime, timedelta, timezone
@@ -13,7 +14,7 @@ from PIL import Image
 
 from nbmap.acquisition import collect_month
 from nbmap.archive import RideArchive
-from nbmap.cloud import execute_worker, is_cloud_due, readme_image, publish_image, public_fingerprint, CommandFailure, IMAGE_PATH, manage
+from nbmap.cloud import execute_worker, is_cloud_due, readme_image, publish_image, public_fingerprint, CommandFailure, IMAGE_PATH, manage, deploy_code
 from nbmap.cloud_state import checkpoint, import_archives, restore, seal, unseal
 from nbmap.dataset import prepare
 from nbmap.storage import read_json, write_json
@@ -144,6 +145,36 @@ class CloudTests(unittest.TestCase):
                 else:
                     self.assertIn('云端定时执行：未启用。', text)
                     self.assertNotIn('下次到期', text)
+
+    def test_private_deploy_keeps_project_skills_and_relocated_docs(self):
+        source = Path(__file__).resolve().parents[1]
+        destination = self.root / 'deploy'
+        destination.mkdir()
+        (destination / 'CONTEXT.md').write_text('obsolete managed context')
+        staged = []
+
+        def run(args, **kwargs):
+            if args[:3] == ['git', 'ls-files', '--']:
+                return subprocess.CompletedProcess(args, 0, stdout=b'CONTEXT.md\n', stderr=b'')
+            if args[:2] == ['git', 'add']:
+                staged.append(args)
+            return subprocess.CompletedProcess(args, 0, stdout=b'', stderr=b'')
+
+        with patch('nbmap.cloud.command', side_effect=run), patch('nbmap.cloud.gh_json', return_value={'ssh_keys': ['ssh-ed25519 synthetic-public-key']}):
+            deploy_code(source, destination, 'fixture/private', {'interval_days': 10})
+        self.assertFalse((destination / 'CONTEXT.md').exists())
+        self.assertEqual((destination / 'docs/CONTEXT.md').read_bytes(), (source / 'docs/CONTEXT.md').read_bytes())
+        self.assertEqual((destination / '.agents/skills/verify-ninebot-map/SKILL.md').read_bytes(),
+                         (source / '.agents/skills/verify-ninebot-map/SKILL.md').read_bytes())
+        self.assertTrue((destination / 'docs/design/DESIGN.md').is_file())
+        self.assertTrue((destination / 'schemas/ride-dataset-v1.schema.json').is_file())
+        self.assertEqual(staged[0][:4], ['git', 'add', '--all', '--'])
+        self.assertIn('CONTEXT.md', staged[0])
+        self.assertIn('.agents', staged[0])
+        self.assertFalse(any((destination / name).exists() for name in ('.private', 'data', 'work')))
+        check = subprocess.run([sys.executable, str(destination / 'scripts/check-project.py')],
+                               capture_output=True, text=True)
+        self.assertEqual(check.returncode, 0, check.stdout + check.stderr)
 
     def test_image_retry_does_not_request_rides_or_reset_sync_clock(self):
         source = Source()

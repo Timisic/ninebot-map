@@ -344,31 +344,31 @@
       },
       "section": {
         "displayName": "section",
-        "purpose": "See DESIGN.md Typography for shipped usage."
+        "purpose": "See docs/design/DESIGN.md Typography for shipped usage."
       },
       "empty-title": {
         "displayName": "empty-title",
-        "purpose": "See DESIGN.md Typography for shipped usage."
+        "purpose": "See docs/design/DESIGN.md Typography for shipped usage."
       },
       "mobile-title": {
         "displayName": "mobile-title",
-        "purpose": "See DESIGN.md Typography for shipped usage."
+        "purpose": "See docs/design/DESIGN.md Typography for shipped usage."
       },
       "count": {
         "displayName": "count",
-        "purpose": "See DESIGN.md Typography for shipped usage."
+        "purpose": "See docs/design/DESIGN.md Typography for shipped usage."
       },
       "control": {
         "displayName": "control",
-        "purpose": "See DESIGN.md Typography for shipped usage."
+        "purpose": "See docs/design/DESIGN.md Typography for shipped usage."
       },
       "mobile-label": {
         "displayName": "mobile-label",
-        "purpose": "See DESIGN.md Typography for shipped usage."
+        "purpose": "See docs/design/DESIGN.md Typography for shipped usage."
       },
       "drag-prompt": {
         "displayName": "drag-prompt",
-        "purpose": "See DESIGN.md Typography for shipped usage."
+        "purpose": "See docs/design/DESIGN.md Typography for shipped usage."
       }
     },
     "shadows": [

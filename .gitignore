@@ -44,5 +44,5 @@ node_modules/
 playwright-report/
 test-results/
 
-.impeccable/*
-!.impeccable/design.json
+docs/design/.impeccable/*
+!docs/design/.impeccable/design.json

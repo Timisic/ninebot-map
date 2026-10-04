@@ -2,21 +2,22 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs/promises';
+import net from 'node:net';
 import { chromium } from 'playwright';
 import { makeDataset } from '../tests/map-fixture.mjs';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const fixture = fileURLToPath(new URL('../tests/fixtures/synthetic-map.json', import.meta.url));
 const server = spawn('./run', ['map', '--dataset', fixture, '--port', '0', '--no-open'], { cwd: root });
-let browser;
+let browser, url;
 try {
-  const url = await new Promise((resolve, reject) => {
+  url = await new Promise((resolve, reject) => {
     let output = '';
     const timer = setTimeout(() => reject(new Error('Local map did not start')), 10000);
     server.on('exit', code => { clearTimeout(timer); reject(new Error(`Server exited ${code}`)); });
     server.stderr.on('data', chunk => { output += chunk; });
     server.stdout.on('data', chunk => { output += chunk; const match = output.match(/http:\/\/127\.0\.0\.1:\d+\//); if (match) { clearTimeout(timer); resolve(match[0]); } });
   });
-  browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || 'chrome', headless: true });
+  browser = await chromium.launch({ ...(process.env.PLAYWRIGHT_CHANNEL === 'chromium' ? {} : { channel: process.env.PLAYWRIGHT_CHANNEL || 'chrome' }), headless: true });
   const context = await browser.newContext({ viewport: { width: 1440, height: 960 }, reducedMotion: 'reduce' });
   const external = [], errors = [];
   await context.route('**/*', route => { if (!route.request().url().startsWith(url) && !route.request().url().startsWith('data:')) { external.push(route.request().url()); route.abort(); } else route.continue(); });
@@ -209,5 +210,20 @@ try {
   await blocked.close();
   console.log(JSON.stringify({ passed: true, checks: ['default-dark', 'theme-persistence-import', 'theme-preserves-view-and-unsaved-label', 'blocked-storage-toggle', 'short-settings-disclosure', 'both-theme-contrast', 'desktop', 'mobile', 'mobile-chinese-hash-title-390-320', 'mobile-date-popover-bounds-390-320', 'counts', 'filter', 'labels-persist', 'malformed-preserves', 'area-hover', 'crs-gating', 'additive-pixels', 'contrast', 'no-external-network', 'no-page-errors', 'online-layer-cleanup', 'coordinate-preview', 'quiet-label-scale', 'tiny-svg-markers', 'marker-opens-panel', 'integer-tile-scaling-dpr1-dpr2', 'online-additive-pixels', 'keyboard-marker-selection'], contrast, overlapBrightnessRatio: +(six / one).toFixed(2) }, null, 2));
 } finally {
-  await browser?.close(); server.kill('SIGINT');
+  try { await browser?.close(); } finally {
+    if (server.exitCode === null && server.signalCode === null) await new Promise(resolve => {
+      server.once('exit', resolve); server.kill('SIGINT');
+      const timer = setTimeout(() => server.kill('SIGKILL'), 5000);
+      server.once('exit', () => clearTimeout(timer));
+    });
+    if (url) {
+      const socketClosed = await new Promise(resolve => {
+        const socket = net.connect({ host: '127.0.0.1', port: Number(new URL(url).port) });
+        socket.once('connect', () => { socket.destroy(); resolve(false); });
+        socket.once('error', () => resolve(true));
+        socket.setTimeout(1000, () => { socket.destroy(); resolve(false); });
+      });
+      assert.equal(socketClosed, true, 'Owned map socket must close after cleanup');
+    }
+  }
 }

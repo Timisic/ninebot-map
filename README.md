@@ -61,4 +61,4 @@ cd ninebot-map
 
 地图默认离线，可选择坐标系并开启在线道路底图。关闭终端服务按 Ctrl-C。会话存于 `.private/`，采集档案存于 `data/`，这两个目录由 Git 忽略。
 
-[地图说明](docs/map-viewer.md) · [数据格式](docs/data-format.md) · [架构](docs/architecture.md) · [数据来源](docs/data-source.md) · [MIT License](LICENSE)
+[项目文档](docs/README.md) · [地图说明](docs/map-viewer.md) · [MIT License](LICENSE)

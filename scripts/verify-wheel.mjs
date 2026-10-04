@@ -2,7 +2,7 @@ import { chromium } from 'playwright';
 import fs from 'node:fs/promises';
 import assert from 'node:assert/strict';
 const root = new URL('../', import.meta.url);
-const browser = await chromium.launch({channel: process.env.PLAYWRIGHT_CHANNEL || 'chrome', headless: true});
+const browser = await chromium.launch({...(process.env.PLAYWRIGHT_CHANNEL === 'chromium' ? {} : { channel: process.env.PLAYWRIGHT_CHANNEL || 'chrome' }), headless: true});
 try {
   const source = await fs.readFile(new URL('web/wheel-zoom.mjs',root),'utf8');
   const rawTraces = [];

@@ -144,4 +144,4 @@ components:
 
 滚轮累计到阈值后立即围绕指针改变一级，连续输入锁定到短暂停顿，避免惯性连跳；保留整数缩放。触摸、键盘和按钮继续使用Leaflet原有处理。高分屏在线缩放上限跟随有效瓦片上限，关闭底图后恢复离线上限。
 
-样式以web/styles.css为准，交互以web/app.mjs、web/map-layer.mjs和web/wheel-zoom.mjs为准。设计预览在.impeccable/design.json，色阶仅用于预览。布局参考[oil-ui](https://github.com/oil-oil/oil-ui)及[Trail](https://ui.oiloil.org/works/trail/)。Lucide固定图标子集的ISC许可与来源保留在web/vendor/lucide/。
+样式以web/styles.css为准，交互以web/app.mjs、web/map-layer.mjs和web/wheel-zoom.mjs为准。设计预览在docs/design/.impeccable/design.json，色阶仅用于预览。布局参考[oil-ui](https://github.com/oil-oil/oil-ui)及[Trail](https://ui.oiloil.org/works/trail/)。Lucide固定图标子集的ISC许可与来源保留在web/vendor/lucide/。
