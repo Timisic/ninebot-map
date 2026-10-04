@@ -71,6 +71,11 @@ def geometry_kind(detail, point_count):
     return "single_point" if point_count == 1 else "sampled_unverified"
 
 
+def geometry_downgraded(old_kind, old_count, old_invalid, new_kind, new_count, new_invalid):
+    rank = {'none': 0, 'single_point': 1, 'server_simplified': 2, 'sampled_unverified': 3}
+    return (rank[new_kind] < rank[old_kind] or new_count < old_count or new_invalid > old_invalid)
+
+
 
 def _month(value):
     if not re.fullmatch(r"20\d{2}(0[1-9]|1[0-2])", value):
@@ -267,19 +272,34 @@ class _Capture:
     def save_page(self, page, payload):
         write_json(self.path / f'page-{page:04d}.json', payload)
 
-    def detail(self, rid, fetch, refresh=False):
+    def detail(self, rid, fetch, refresh=False, retry_incomplete=False):
         cached = self.details / (key(rid) + '.json')
-        if cached.exists() and not refresh:
+        previous = None
+        if cached.exists():
             try:
-                candidate = read_json(cached)
-                if isinstance(candidate, dict) and parse_trail(candidate.get('trail'))[0]:
-                    return candidate, 'cached'
+                previous = read_json(cached)
+                if not isinstance(previous, dict):
+                    raise ValueError('未知缓存结构')
+                points, invalid = parse_trail(previous.get('trail'))
+                usable = points and not invalid and geometry_kind(previous, len(points)) == 'sampled_unverified'
+                if 'duration' in previous and not number(previous['duration']):
+                    usable = False
+                if 'mileages' in previous and not number(previous['mileages']):
+                    usable = False
+                if points and not refresh and (not retry_incomplete or usable):
+                    return previous, 'cached'
             except (ValueError, OSError):
-                pass
+                previous = None
         candidate = fetch()
         write_json(self.path / ('detail-' + key(rid) + '.json'), candidate)
         if not isinstance(candidate, dict) or not candidate:
             raise ValueError('未知详情结构')
+        if previous:
+            old_points, old_invalid = parse_trail(previous.get('trail'))
+            new_points, new_invalid = parse_trail(candidate.get('trail'))
+            if geometry_downgraded(geometry_kind(previous, len(old_points)), len(old_points), old_invalid,
+                                   geometry_kind(candidate, len(new_points)), len(new_points), new_invalid):
+                return previous, 'cached'
         write_json(cached, candidate)
         return candidate, 'fetched'
 
@@ -290,6 +310,23 @@ class _Capture:
         self.points.extend(points)
 
     def finish(self, coverage):
+        previous = None
+        if (self.archive.path / 'months' / f'{self.month}.json').exists():
+            previous = self.archive.read_month(self.month)
+            old_rides = {r['ride_id']: r for r in previous['rides']}
+            old_points = {}
+            for p in previous['points']:
+                old_points.setdefault(p['ride_id'], []).append(p)
+            # The self-contained snapshot protects geometry even if caches were removed.
+            retained = set()
+            for i, ride in enumerate(self.rides):
+                old = old_rides.get(ride['ride_id'])
+                if old and geometry_downgraded(old['geometry_kind'], old['coordinate_count'], old['invalid_point_count'],
+                                               ride['geometry_kind'], ride['coordinate_count'], ride['invalid_point_count']):
+                    self.rides[i] = {**old, 'detail_status': ride['detail_status']}
+                    retained.add(ride['ride_id'])
+            self.points = [p for p in self.points if p['ride_id'] not in retained]
+            self.points.extend(p for rid in retained for p in old_points.get(rid, []))
         states = Counter(r['detail_status'] for r in self.rides)
         report = {**coverage, 'schema_version': 2, 'month': self.month, 'vehicle_key': self.archive.vehicle_key,
                   'run_id': self.run_id, 'source': 'ninebot_cloud_unofficial', 'listed_rides': len(self.rides),
@@ -298,12 +335,17 @@ class _Capture:
                   'coordinate_points': len(self.points), 'invalid_points': sum(r['invalid_point_count'] for r in self.rides),
                   'coordinate_system': 'unverified', 'point_timestamps': 'not_provided_by_known_trail_format',
                   'raw_snapshot': str(self.path.relative_to(self.archive.root))}
-        report['published'] = coverage['stop_reason'] not in ('request_error', 'schema_error')
-        if report['published'] and (self.archive.path / 'months' / f'{self.month}.json').exists():
-            previous = self.archive.read_month(self.month)['coverage']
-            if (previous['list_complete'] is True and report['list_complete'] is not True) or report['detail_failures']:
+        report['published'] = (coverage['list_complete'] is True and not coverage['errors']
+                               and not report['detail_failures'] and not report['invalid_points'])
+        if previous and not {r['ride_id'] for r in previous['rides']}.issubset({r['ride_id'] for r in self.rides}):
+            report['published'] = False
+        if previous:
+            old_distance = number(previous['coverage'].get('upstream_distance_km'))
+            new_distance = number(coverage['upstream_summary'].get('total_mileages'))
+            if old_distance is not None and (new_distance is None or new_distance + 1e-6 < old_distance):
                 report['published'] = False
-                report['publication_reason'] = 'retained_previous_snapshot_after_incomplete_refresh'
+        if not report['published']:
+            report['publication_reason'] = 'incomplete_or_regressing_capture'
         snapshot = {'schema_version': 2, 'coverage': report, 'rides': self.rides, 'points': self.points}
         write_json(self.path / 'coverage.json', report)
         if not report['published']:

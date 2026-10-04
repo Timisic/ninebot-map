@@ -14,7 +14,7 @@ from .acquisition import Acquisition, month_range
 from .archive import RideArchive
 from .summary import summarize
 from .dataset import prepare, prepare_configured, validate_dataset
-from .storage import private_dir, read_json, write_json
+from .storage import private_dir, read_json, write_json, sync_lock
 from .vendor import ninebot_api as api
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -132,6 +132,22 @@ def main(argv=None):
     dataset.add_argument('--map-from', help='地图起点：YYYY-MM-DD 或带时区的 ISO 时间；省略时复用已保存设置')
     dataset.add_argument('--timezone', help='IANA 时区；默认复用已保存设置或 Asia/Shanghai')
     dataset.add_argument('--all-map-tracks', action='store_true', help='清除地图起始时间，使用全部可用采样轨迹')
+    viewer = sub.add_parser('map', help='离线打开本地骑行地图，不读取账号')
+    viewer.add_argument('--dataset', type=Path, help='显式选择 Ride Dataset v1 文件；省略则打开空白导入页')
+    viewer.add_argument('--port', type=int, default=8765, help='本地端口；0 表示自动选择')
+    viewer.add_argument('--no-open', action='store_true', help='只启动本地服务，不打开浏览器')
+    viewer.add_argument('--latest', action='store_true', help='读取本地最新标准数据，自动跟随同步更新')
+    schedule = sub.add_parser('schedule', help='管理本机定期增量同步')
+    schedule.add_argument('action', choices=('install', 'status', 'run', 'disable', 'uninstall'))
+    schedule.add_argument('--interval-days', type=float, help='连续间隔天数，默认 10；重复安装时保留已设周期')
+    schedule.add_argument('--force', action='store_true', help='手动立即同步，不等待到期')
+    cloud = sub.add_parser('cloud', help='私有 GitHub Actions 同步与本机下载')
+    cloud.add_argument('action', choices=('install', 'status', 'run', 'pull', 'map', 'credentials', 'disable'))
+    cloud.add_argument('--repo', help='私有同步仓库 owner/name')
+    cloud.add_argument('--interval-days', type=float, help='连续间隔天数，默认 10')
+    cloud.add_argument('--publish-repo', action='append', dest='publish_repos', help='仅接收无底图 PNG 的公开仓库，可指定两次')
+    cloud.add_argument('--port', type=int, default=8765)
+    cloud.add_argument('--no-open', action='store_true')
     check = sub.add_parser('validate', help='离线校验任意来源的标准 dataset.json')
     check.add_argument('path', type=Path)
     for command in ("migrate", "summarize"):
@@ -143,7 +159,32 @@ def main(argv=None):
     p.add_argument("--max-pages", type=int, default=100, help="每月请求上限，默认 100 页")
     p.add_argument("--refresh-details", action="store_true", help="重新请求已成功缓存的详情")
     args = parser.parse_args(argv)
+    if args.command == 'map':
+        from .map_server import serve_map
+        path = args.dataset
+        if args.latest:
+            if path:
+                raise ValueError('--latest 与 --dataset 不能同时使用')
+            prefs_path = args.config_dir / 'preferences.json'
+            prefs = read_json(prefs_path) if prefs_path.exists() else {}
+            archives = RideArchive.discover(args.data_dir)
+            archive = RideArchive.for_vehicle(args.data_dir, prefs['sn']) if prefs.get('sn') else (archives[0] if len(archives) == 1 else None)
+            if archive is None:
+                raise ValueError('请指定 --dataset 或先选择车辆并运行 prepare。')
+            path = archive.path / 'prepared' / 'dataset.json'
+            if not path.exists():
+                directory = prepare_configured(archive)
+                if not directory:
+                    raise ValueError('请先运行 ./run prepare。')
+        return serve_map(path, args.port, args.no_open)
     config, data = args.config_dir.resolve(), args.data_dir.resolve()
+    if args.command == 'cloud':
+        from .cloud import manage
+        return manage(args.action, config, data, ROOT, repo=args.repo, interval_days=args.interval_days,
+                      publish_repos=args.publish_repos, port=args.port, no_open=args.no_open)
+    if args.command == 'schedule':
+        from .schedule import manage
+        return manage(args.action, config, data, ROOT, interval_days=args.interval_days, force=args.force)
     if args.command == 'validate':
         dataset = validate_dataset(read_json(args.path))
         print(f"数据有效：{dataset['summary']['ride_count']} 条行程，{dataset['summary']['map_ride_count']} 条地图轨迹。")
@@ -151,18 +192,20 @@ def main(argv=None):
     if args.command == 'prepare':
         if args.map_from and args.all_map_tracks:
             raise ValueError('--map-from 与 --all-map-tracks 不能同时使用')
-        archives = [RideArchive(data, args.vehicle)] if args.vehicle else RideArchive.discover(data)
-        if not archives:
-            raise ValueError('没有本地档案，请先采集。')
-        for archive in archives:
-            settings_path = archive.path / 'dataset-settings.json'
-            settings = read_json(settings_path) if settings_path.exists() else {}
-            cutoff = None if args.all_map_tracks else args.map_from or settings.get('map_from')
-            directory = prepare(archive, map_from=cutoff, timezone_name=args.timezone or settings.get('timezone', 'Asia/Shanghai'))
-            print(f'标准数据：{directory}/dataset.json')
+        with sync_lock(data), sync_lock(config):
+            archives = [RideArchive(data, args.vehicle)] if args.vehicle else RideArchive.discover(data)
+            if not archives:
+                raise ValueError('没有本地档案，请先采集。')
+            for archive in archives:
+                settings_path = archive.path / 'dataset-settings.json'
+                settings = read_json(settings_path) if settings_path.exists() else {}
+                cutoff = None if args.all_map_tracks else args.map_from or settings.get('map_from')
+                directory = prepare(archive, map_from=cutoff, timezone_name=args.timezone or settings.get('timezone', 'Asia/Shanghai'))
+                print(f'标准数据：{directory}/dataset.json')
         return 0
     if args.command in ("migrate", "summarize"):
-        return offline_archive(args.command, args.vehicle, data)
+        with sync_lock(data), sync_lock(config):
+            return offline_archive(args.command, args.vehicle, data)
     if args.command == "doctor":
         api.self_test()
         print(f"Python {sys.version.split()[0]} / cryptography {importlib.metadata.version('cryptography')}")
@@ -188,6 +231,11 @@ def main(argv=None):
             raise ValueError("请检查月份和 max-pages 参数。")
     private_dir(config)
     private_dir(data)
+    with sync_lock(data), sync_lock(config):
+        return connected_command(args, config, data)
+
+
+def connected_command(args, config, data):
     client = Client(config, progress=lambda message: print(message, flush=True))
     if args.command == "login":
         login(client)

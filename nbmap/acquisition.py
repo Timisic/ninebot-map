@@ -21,7 +21,7 @@ def month_range(start, end):
     return [f'{n // 12:04d}{n % 12 + 1:02d}' for n in range(first, last + 1)]
 
 
-def collect_month(source, sn, month, archive, *, max_pages=100, refresh_details=False, progress=None):
+def collect_month(source, sn, month, archive, *, max_pages=100, refresh_details=False, retry_incomplete=False, progress=None):
     month_range(month, month)
     if max_pages < 1:
         raise ValueError('max_pages 必须大于 0')
@@ -71,7 +71,7 @@ def collect_month(source, sn, month, archive, *, max_pages=100, refresh_details=
     for index, (rid, row) in enumerate(rows.items(), 1):
         detail, state = None, 'unavailable'
         try:
-            detail, state = capture.detail(rid, lambda: source.detail(sn, rid), refresh_details)
+            detail, state = capture.detail(rid, lambda: source.detail(sn, rid), refresh_details, retry_incomplete)
         except (ValueError, RuntimeError, OSError) as exc:
             errors.append({'stage': 'detail', 'ride_id': rid, 'kind': type(exc).__name__, 'message': safe_error(exc)})
         capture.add(row, detail, state)
@@ -102,7 +102,8 @@ class Acquisition:
     def __init__(self, source, archive: RideArchive):
         self.source, self.archive = source, archive
 
-    def run(self, sn, start, end, *, max_pages=100, refresh_details=False, progress=None):
+    def run(self, sn, start, end, *, max_pages=100, refresh_details=False, retry_incomplete=False,
+            retry_incomplete_since=None, progress=None):
         months = month_range(start, end)
         if max_pages < 1:
             raise ValueError('max_pages 必须大于 0')
@@ -118,12 +119,15 @@ class Acquisition:
             for current in months:
                 checkpoint('running')
                 report = collect_month(self.source, sn, current, self.archive, max_pages=max_pages,
-                    refresh_details=refresh_details, progress=emit)
+                    refresh_details=refresh_details,
+                    retry_incomplete=retry_incomplete and (retry_incomplete_since is None or current >= retry_incomplete_since),
+                    progress=emit)
                 reports.append(report)
                 checkpoint('running')
                 emit({'kind': 'month', 'month': current, 'report': report})
             summary = summarize(self.archive)
-            dataset_directory = prepare_configured(self.archive)
+            # Failed captures leave the last prepared dataset and its pointer intact.
+            dataset_directory = prepare_configured(self.archive) if all(r.get('published') for r in reports) else None
             gaps = any(_has_gaps(r) for r in reports)
             checkpoint('completed_with_gaps' if gaps else 'completed')
             return AcquisitionResult(reports, summary, gaps, str(self.archive.report_path()),

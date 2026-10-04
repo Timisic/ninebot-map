@@ -299,6 +299,8 @@ def prepare(archive, *, map_from=None, timezone_name='Asia/Shanghai', save_setti
               'listed_ride_count', 'listed_distance_m', 'list_complete'])
     write_json(directory / 'summary.json', dataset['summary'])
     write_json(parent / 'latest.json', {'format': FORMAT, 'schema_version': VERSION, 'directory': generation})
+    # Stable local entrypoint for a running map; replacement is atomic.
+    write_json(parent / 'dataset.json', dataset)
     if save_settings:
         write_json(archive.path / 'dataset-settings.json', {'map_from': dataset['selection']['map_from'], 'timezone': timezone_name})
     return directory

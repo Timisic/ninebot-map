@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>骑行地图</title>
+<script src="/theme-init.js"></script>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/vendor/leaflet/leaflet.css"><link rel="stylesheet" href="/styles.css">
+<script src="/vendor/leaflet/leaflet.js" defer></script><script type="module" src="/app.mjs"></script>
+</head>
+<body>
+<header class="topbar"><div class="title"><h1 id="page-title">骑行地图</h1><span id="local-status">本地数据</span></div><div class="actions"><button id="theme-toggle" type="button" aria-label="切换为浅色" title="切换为浅色"></button><button id="import-button" aria-label="导入数据">导入</button><input id="file" type="file" accept=".json,application/json" hidden><button id="fit" aria-label="查看全部路线" disabled>全图</button><button id="toggle-places" aria-expanded="true" aria-controls="places-panel">收起地点</button></div></header>
+<main id="workspace">
+  <div id="map" aria-label="骑行轨迹地图" tabindex="0"></div>
+  <section class="toolbar" aria-label="地图筛选">
+    <div class="metrics" aria-live="polite"><span id="history-stat">全部历史 <strong>暂无数据</strong></span><span id="visible-stat">当前地图 <strong>暂无数据</strong></span></div>
+    <details id="date-panel"><summary>筛选日期</summary><div class="date-controls"><label>开始日期<input id="from" type="date" disabled></label><label>结束日期<input id="to" type="date" disabled></label><button id="clear-dates" disabled>全部日期</button></div></details>
+  </section>
+  <aside id="places-panel" aria-label="常去地点">
+    <div class="panel-heading"><h2>常去地点</h2><span id="place-total">0 处</span></div>
+    <ol id="places"></ol><p id="places-empty">导入后查看常去地点。</p>
+    <form id="label-form" hidden><label for="place-label">为这个地点命名</label><div class="label-row"><input id="place-label" maxlength="40" autocomplete="off"><button type="submit">保存</button></div><button id="clear-selection" type="button" class="text-button">取消选择</button><p id="label-note"></p></form>
+    <details class="place-method"><summary>次数怎么算？</summary><p>每条轨迹的终点计一次，在约 100 米范围内聚合。它表示行程结束，不代表停留时长或已确认到访。名称只保存在本机。</p></details>
+  </aside>
+  <section id="empty" class="empty-state"><h2 id="empty-title">打开自己的骑行地图</h2><p id="empty-description">选择标准数据文件，路线和常去地点都在本机处理。</p><button id="empty-import">选择数据文件</button></section>
+  <div class="map-settings"><label class="check"><input id="show-grid" type="checkbox" disabled>经过次数</label><details id="map-options"><summary>设置</summary><div class="settings-content"><label class="check"><input id="basemap" type="checkbox" disabled>道路底图</label><label for="crs">坐标系</label><select id="crs" disabled><option value="unverified">未核实 · 无底图</option><option value="wgs84">原始坐标 · WGS84 预览</option><option value="gcj02">GCJ-02 · 本地校准</option><option value="bd09">BD-09 · 本地校准</option></select><p id="basemap-gate">请先核实坐标系，再启用底图。</p><details id="data-notes"><summary>数据与隐私</summary><p id="crs-note"></p><p>底图来自 OpenStreetMap。只请求地图瓦片，骑行轨迹不上传。</p><p>经过次数按约 200 米网格统计，同一行程重复经过一个格子只计一次。它不是道路匹配后的精确通行次数。</p><p id="status" role="status" aria-live="polite">等待本地数据文件</p></details></div></details></div>
+  <div id="cell-info" class="cell-info" hidden role="status"></div>
+  <div id="error" class="error" role="alert" hidden></div>
+</main>
+</body></html>

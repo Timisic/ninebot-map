@@ -1,0 +1,59 @@
+name: Private ride sync
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Sync immediately, ignoring the persisted due time
+        type: boolean
+        default: false
+permissions:
+  contents: write
+concurrency:
+  group: private-ride-sync
+  cancel-in-progress: false
+jobs:
+  due:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      due: ${{ steps.check.outputs.due }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7
+        with:
+          python-version: '3.11'
+          enable-cache: true
+      - run: uv sync --frozen
+      - id: check
+        name: Check persisted due time without contacting Ninebot
+        env:
+          NINEBOT_SESSION: ${{ secrets.NINEBOT_SESSION }}
+          CLOUD_STATE_KEY: ${{ secrets.CLOUD_STATE_KEY }}
+          SYNC_FORCE: ${{ inputs.force }}
+        run: .venv/bin/python -m nbmap.cloud gate
+  sync:
+    needs: due
+    if: needs.due.outputs.due == 'true'
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: true
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7
+        with:
+          python-version: '3.11'
+          enable-cache: true
+      - run: uv sync --frozen
+      - name: Verify the collector and privacy boundaries with synthetic data
+        run: .venv/bin/python -m unittest discover -s tests -q
+      - name: Acquire rides, persist encrypted state, publish only the PNG
+        env:
+          NINEBOT_SESSION: ${{ secrets.NINEBOT_SESSION }}
+          CLOUD_STATE_KEY: ${{ secrets.CLOUD_STATE_KEY }}
+          PUBLIC_DEPLOY_KEY_1: ${{ secrets.PUBLIC_DEPLOY_KEY_1 }}
+          PUBLIC_DEPLOY_KEY_2: ${{ secrets.PUBLIC_DEPLOY_KEY_2 }}
+          SYNC_FORCE: ${{ inputs.force }}
+        run: .venv/bin/python -m nbmap.cloud worker

@@ -4,6 +4,8 @@ import io
 import json
 import os
 import tempfile
+import fcntl
+from contextlib import contextmanager
 from pathlib import Path
 
 
@@ -12,6 +14,22 @@ def private_dir(path):
     path.mkdir(parents=True, exist_ok=True, mode=0o700)
     path.chmod(0o700)
     return path
+
+
+@contextmanager
+def sync_lock(root):
+    """One writer per local archive directory; the OS releases locks after crashes."""
+    path = private_dir(root) / 'sync.lock'
+    with path.open('a') as stream:
+        path.chmod(0o600)
+        try:
+            fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise RuntimeError('另一个同步或配置任务正在运行，请稍后重试。') from None
+        try:
+            yield
+        finally:
+            fcntl.flock(stream, fcntl.LOCK_UN)
 
 
 def write_text(path, text):

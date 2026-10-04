@@ -1,0 +1,7 @@
+{
+  "name": "ninebot-local-map",
+  "private": true,
+  "type": "module",
+  "scripts": {"test": "node --test tests/map-model.test.mjs", "test:browser": "node scripts/verify-map.mjs", "test:wheel": "node scripts/verify-wheel.mjs"},
+  "devDependencies": {"playwright": "1.58.2"}
+}

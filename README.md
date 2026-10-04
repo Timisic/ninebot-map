@@ -1,20 +1,18 @@
+<!-- ninebot-track-image:start -->
+
+![骑行轨迹](assets/ninebot-tracks.png)
+
+<!-- ninebot-track-image:end -->
+
 # Ninebot Map
 
-非官方九号骑行数据采集工具：登录自己的账号，将行程、里程和可获取的轨迹保存在本机，导出 CSV / JSON。
+采集九号骑行数据，在本机查看轨迹地图，导出 CSV 和 JSON，并通过 GitHub Actions 定期同步。
 
-**当前只做数据采集与整理，地图可视化尚未实现。**
-
-> **云端多点轨迹通常只提供最近约 180 天的数据。** 更早的行程通常被简化为起点、终点及里程等汇总，无法据此还原道路路线。建议及时同步；已保存到本地的轨迹可继续保留。历史里程与轨迹范围分别统计。
-
-## 功能
-
-- 密码登录、选择本人车辆，按月分页获取行程及详情。
-- 本地缓存、失败补取、覆盖检查，支持重复同步。
-- 保留全部可获取里程，按日期筛选地图轨迹，生成独立的 `dataset.json`。
+九号官方提供最近 180 天的详细轨迹数据。
 
 ## 开始使用
 
-需要 [uv](https://docs.astral.sh/uv/getting-started/installation/)；脚本会配置 Python 3.11+ 环境和依赖。终端脚本适用于 macOS / Linux。
+安装 [uv](https://docs.astral.sh/uv/getting-started/installation/)，然后在 macOS 或 Linux 终端运行：
 
 ```bash
 git clone https://github.com/Timisic/ninebot-map.git
@@ -23,37 +21,44 @@ cd ninebot-map
 ./run start
 ```
 
-按提示输入**自己的手机号和账号密码**（国家码固定 86），选择车辆及起始月份。密码隐藏输入、不保存；成功会话仅存本机。短信登录及人机验证暂不支持，登录可能使手机 App 的现有会话失效。
+按提示登录自己的账号、选择车辆和起始月份。脚本配置 Python 3.11+ 环境及依赖，密码隐藏输入。
 
 ```bash
 ./run sync                            # 同步本月并汇总
-./run sync --from 202601 --to 202603    # 指定月份范围（示例）
-./run prepare --all-map-tracks         # 生成可供后续地图读取的标准数据
-./run prepare --map-from 2026-01-01    # 或只选指定日期之后的轨迹
-./run summarize                       # 离线汇总，复用已保存的筛选设置
+./run sync --from 202601 --to 202603    # 同步指定月份
+./run prepare --all-map-tracks         # 生成全部已保存轨迹的地图数据
+./run prepare --map-from 2026-01-01    # 或选择指定日期之后的轨迹
+./run map --latest                    # 打开最新本地地图
 ```
 
-输出路径会显示在终端。运行 `prepare` 后，后续同步会沿用该车辆的范围设置并更新标准数据。
+地图支持路线叠加、日期筛选、经过区域次数和终点地点列表。后续同步沿用已保存的地图范围。
 
-## 让 Agent 帮忙配置
+## 云端同步
 
-可以把下面这段话交给本机 Agent：
+先完成首次采集，并登录 [GitHub CLI](https://cli.github.com/)，再运行：
 
-> 按 README 配置 Python 和 uv，运行 setup 和 doctor。让我在本机终端输入自己的账号密码；不要索取或保存密码。登录后帮我读取车辆、同步行程并生成标准数据，不要上传会话、原始数据或坐标。
+```bash
+./run cloud install --publish-repo owner/ninebot-map --publish-repo owner/owner
+./run cloud run                       # 立即触发云端同步
+./run cloud status                    # 查看状态和下次到期时间
+./run cloud map                       # 下载最新档案并打开本地地图
+./run cloud pull                      # 下载档案并更新本地地图数据
+./run cloud install --interval-days 7 # 修改同步周期
+./run cloud disable                   # 停用云端调度
+```
 
-## 数据与隐私
+默认每 10 天同步一次，GitHub Actions 每小时检查到期时间。会话和完整历史档案加密保存在独立私有仓库，公开仓库更新轨迹 PNG 和 README 图片。
 
-- `.private/` 保存会话，`data/` 保存档案；两者默认被 Git 忽略，未包含在仓库中。示例和测试数据均为合成数据。
-- 不要提交或上传这两个目录，也不要把令牌贴进 Issue。可用 `--config-dir`、`--data-dir` 指定其他本地目录。
-- `dataset.json` 与九号账号解耦，可供后续统计或地图读取；坐标系尚未核实，不直接当作 WGS84 GeoJSON。
-- 兼容性受车型、地区及九号服务端变化影响；180 天内也不保证每条轨迹完整。
+在本机运行 `cloud map` 或 `cloud pull` 下载最新数据，已打开的地图随后刷新。需要重新登录时，运行 `./run login`、`./run cloud credentials` 和 `./run cloud run`。
 
-[数据格式](docs/data-format.md) · [架构](docs/architecture.md) · [来源](docs/data-source.md) · [MIT License](LICENSE)
+## 导入本地数据
 
-<!-- ninebot-track-image:start -->
+```bash
+./run map                              # 打开本地导入页
+./run map --dataset /path/to/dataset.json
+./run map --dataset tests/fixtures/synthetic-map.json --no-open
+```
 
-## 骑行轨迹
+地图默认离线，可选择坐标系并开启在线道路底图。关闭终端服务按 Ctrl-C。会话存于 `.private/`，采集档案存于 `data/`，这两个目录由 Git 忽略。
 
-![无底图骑行轨迹](assets/ninebot-tracks.png)
-
-<!-- ninebot-track-image:end -->
+[地图说明](docs/map-viewer.md) · [数据格式](docs/data-format.md) · [架构](docs/architecture.md) · [数据来源](docs/data-source.md) · [MIT License](LICENSE)

@@ -1,0 +1,474 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-04T09:25:27.375975+00:00",
+  "title": "骑行地图界面",
+  "extensions": {
+    "colorMeta": {
+      "panel": {
+        "role": "neutral",
+        "displayName": "panel",
+        "theme": "dark"
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "ink",
+        "theme": "dark"
+      },
+      "secondary": {
+        "role": "neutral",
+        "displayName": "secondary",
+        "theme": "dark"
+      },
+      "primary": {
+        "role": "primary",
+        "displayName": "primary",
+        "theme": "dark"
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "line",
+        "theme": "dark"
+      },
+      "focus": {
+        "role": "primary",
+        "displayName": "focus",
+        "theme": "dark"
+      },
+      "background": {
+        "role": "neutral",
+        "displayName": "background",
+        "theme": "dark",
+        "tonalRamp": [
+          "oklch(0.15 0.018 195)",
+          "oklch(0.25 0.018 195)",
+          "oklch(0.35 0.018 195)",
+          "oklch(0.45 0.018 195)",
+          "oklch(0.55 0.018 195)",
+          "oklch(0.65 0.018 195)",
+          "oklch(0.80 0.018 195)",
+          "oklch(0.95 0.018 195)"
+        ],
+        "rampPurpose": "Synthesized preview only; not shipped theme tokens."
+      },
+      "map-background": {
+        "role": "neutral",
+        "displayName": "map-background",
+        "theme": "dark"
+      },
+      "hover": {
+        "role": "neutral",
+        "displayName": "hover",
+        "theme": "dark"
+      },
+      "hover-line": {
+        "role": "neutral",
+        "displayName": "hover-line",
+        "theme": "dark"
+      },
+      "active": {
+        "role": "neutral",
+        "displayName": "active",
+        "theme": "dark"
+      },
+      "selected": {
+        "role": "neutral",
+        "displayName": "selected",
+        "theme": "dark"
+      },
+      "selection": {
+        "role": "neutral",
+        "displayName": "selection",
+        "theme": "dark"
+      },
+      "selection-ink": {
+        "role": "neutral",
+        "displayName": "selection-ink",
+        "theme": "dark"
+      },
+      "error-panel": {
+        "role": "neutral",
+        "displayName": "error-panel",
+        "theme": "dark"
+      },
+      "error-line": {
+        "role": "neutral",
+        "displayName": "error-line",
+        "theme": "dark"
+      },
+      "error-ink": {
+        "role": "neutral",
+        "displayName": "error-ink",
+        "theme": "dark"
+      },
+      "marker": {
+        "role": "neutral",
+        "displayName": "marker",
+        "theme": "dark"
+      },
+      "marker-selected": {
+        "role": "neutral",
+        "displayName": "marker-selected",
+        "theme": "dark"
+      },
+      "marker-fill": {
+        "role": "neutral",
+        "displayName": "marker-fill",
+        "theme": "dark"
+      },
+      "marker-shadow": {
+        "role": "neutral",
+        "displayName": "marker-shadow",
+        "theme": "dark"
+      },
+      "on-primary": {
+        "role": "primary",
+        "displayName": "on-primary",
+        "theme": "dark"
+      },
+      "route": {
+        "role": "secondary",
+        "displayName": "route",
+        "theme": "both",
+        "tonalRamp": [
+          "oklch(0.15 0.070 185)",
+          "oklch(0.25 0.070 185)",
+          "oklch(0.35 0.070 185)",
+          "oklch(0.45 0.070 185)",
+          "oklch(0.55 0.070 185)",
+          "oklch(0.65 0.070 185)",
+          "oklch(0.80 0.070 185)",
+          "oklch(0.95 0.070 185)"
+        ],
+        "rampPurpose": "Synthesized preview only; not shipped theme tokens."
+      },
+      "light-panel": {
+        "role": "neutral",
+        "displayName": "light-panel",
+        "theme": "light",
+        "tonalRamp": [
+          "oklch(0.15 0.004 105)",
+          "oklch(0.25 0.004 105)",
+          "oklch(0.35 0.004 105)",
+          "oklch(0.45 0.004 105)",
+          "oklch(0.55 0.004 105)",
+          "oklch(0.65 0.004 105)",
+          "oklch(0.80 0.004 105)",
+          "oklch(0.95 0.004 105)"
+        ],
+        "rampPurpose": "Synthesized preview only; not shipped theme tokens."
+      },
+      "light-ink": {
+        "role": "neutral",
+        "displayName": "light-ink",
+        "theme": "light",
+        "tonalRamp": [
+          "oklch(0.15 0.018 160)",
+          "oklch(0.25 0.018 160)",
+          "oklch(0.35 0.018 160)",
+          "oklch(0.45 0.018 160)",
+          "oklch(0.55 0.018 160)",
+          "oklch(0.65 0.018 160)",
+          "oklch(0.80 0.018 160)",
+          "oklch(0.95 0.018 160)"
+        ],
+        "rampPurpose": "Synthesized preview only; not shipped theme tokens."
+      },
+      "light-secondary": {
+        "role": "neutral",
+        "displayName": "light-secondary",
+        "theme": "light",
+        "tonalRamp": [
+          "oklch(0.15 0.016 150)",
+          "oklch(0.25 0.016 150)",
+          "oklch(0.35 0.016 150)",
+          "oklch(0.45 0.016 150)",
+          "oklch(0.55 0.016 150)",
+          "oklch(0.65 0.016 150)",
+          "oklch(0.80 0.016 150)",
+          "oklch(0.95 0.016 150)"
+        ],
+        "rampPurpose": "Synthesized preview only; not shipped theme tokens."
+      },
+      "light-primary": {
+        "role": "primary",
+        "displayName": "light-primary",
+        "theme": "light",
+        "tonalRamp": [
+          "oklch(0.15 0.070 175)",
+          "oklch(0.25 0.070 175)",
+          "oklch(0.35 0.070 175)",
+          "oklch(0.45 0.070 175)",
+          "oklch(0.55 0.070 175)",
+          "oklch(0.65 0.070 175)",
+          "oklch(0.80 0.070 175)",
+          "oklch(0.95 0.070 175)"
+        ],
+        "rampPurpose": "Synthesized preview only; not shipped theme tokens."
+      },
+      "light-line": {
+        "role": "neutral",
+        "displayName": "light-line",
+        "theme": "light",
+        "tonalRamp": [
+          "oklch(0.15 0.012 140)",
+          "oklch(0.25 0.012 140)",
+          "oklch(0.35 0.012 140)",
+          "oklch(0.45 0.012 140)",
+          "oklch(0.55 0.012 140)",
+          "oklch(0.65 0.012 140)",
+          "oklch(0.80 0.012 140)",
+          "oklch(0.95 0.012 140)"
+        ],
+        "rampPurpose": "Synthesized preview only; not shipped theme tokens."
+      },
+      "light-focus": {
+        "role": "primary",
+        "displayName": "light-focus",
+        "theme": "light",
+        "tonalRamp": [
+          "oklch(0.15 0.080 175)",
+          "oklch(0.25 0.080 175)",
+          "oklch(0.35 0.080 175)",
+          "oklch(0.45 0.080 175)",
+          "oklch(0.55 0.080 175)",
+          "oklch(0.65 0.080 175)",
+          "oklch(0.80 0.080 175)",
+          "oklch(0.95 0.080 175)"
+        ],
+        "rampPurpose": "Synthesized preview only; not shipped theme tokens."
+      },
+      "light-map-background": {
+        "role": "neutral",
+        "displayName": "light-map-background",
+        "theme": "light"
+      },
+      "light-hover": {
+        "role": "neutral",
+        "displayName": "light-hover",
+        "theme": "light"
+      },
+      "light-hover-line": {
+        "role": "neutral",
+        "displayName": "light-hover-line",
+        "theme": "light"
+      },
+      "light-active": {
+        "role": "neutral",
+        "displayName": "light-active",
+        "theme": "light"
+      },
+      "light-selected": {
+        "role": "neutral",
+        "displayName": "light-selected",
+        "theme": "light",
+        "tonalRamp": [
+          "oklch(0.15 0.018 155)",
+          "oklch(0.25 0.018 155)",
+          "oklch(0.35 0.018 155)",
+          "oklch(0.45 0.018 155)",
+          "oklch(0.55 0.018 155)",
+          "oklch(0.65 0.018 155)",
+          "oklch(0.80 0.018 155)",
+          "oklch(0.95 0.018 155)"
+        ],
+        "rampPurpose": "Synthesized preview only; not shipped theme tokens."
+      },
+      "light-selection": {
+        "role": "neutral",
+        "displayName": "light-selection",
+        "theme": "light"
+      },
+      "light-selection-ink": {
+        "role": "neutral",
+        "displayName": "light-selection-ink",
+        "theme": "light"
+      },
+      "light-error-panel": {
+        "role": "neutral",
+        "displayName": "light-error-panel",
+        "theme": "light"
+      },
+      "light-error-line": {
+        "role": "neutral",
+        "displayName": "light-error-line",
+        "theme": "light"
+      },
+      "light-error-ink": {
+        "role": "neutral",
+        "displayName": "light-error-ink",
+        "theme": "light"
+      },
+      "light-marker": {
+        "role": "neutral",
+        "displayName": "light-marker",
+        "theme": "light"
+      },
+      "light-marker-selected": {
+        "role": "neutral",
+        "displayName": "light-marker-selected",
+        "theme": "light"
+      },
+      "light-marker-fill": {
+        "role": "neutral",
+        "displayName": "light-marker-fill",
+        "theme": "light"
+      },
+      "light-marker-shadow": {
+        "role": "neutral",
+        "displayName": "light-marker-shadow",
+        "theme": "light"
+      },
+      "light-on-primary": {
+        "role": "primary",
+        "displayName": "light-on-primary",
+        "theme": "light"
+      },
+      "light-background": {
+        "role": "neutral",
+        "displayName": "light-background",
+        "theme": "light"
+      }
+    },
+    "typographyMeta": {
+      "title": {
+        "displayName": "标题",
+        "purpose": "页面名称。"
+      },
+      "body": {
+        "displayName": "正文",
+        "purpose": "地点名称、输入与一般说明。"
+      },
+      "label": {
+        "displayName": "标签",
+        "purpose": "紧凑控件与次要提示。"
+      },
+      "section": {
+        "displayName": "section",
+        "purpose": "See DESIGN.md Typography for shipped usage."
+      },
+      "empty-title": {
+        "displayName": "empty-title",
+        "purpose": "See DESIGN.md Typography for shipped usage."
+      },
+      "mobile-title": {
+        "displayName": "mobile-title",
+        "purpose": "See DESIGN.md Typography for shipped usage."
+      },
+      "count": {
+        "displayName": "count",
+        "purpose": "See DESIGN.md Typography for shipped usage."
+      },
+      "control": {
+        "displayName": "control",
+        "purpose": "See DESIGN.md Typography for shipped usage."
+      },
+      "mobile-label": {
+        "displayName": "mobile-label",
+        "purpose": "See DESIGN.md Typography for shipped usage."
+      },
+      "drag-prompt": {
+        "displayName": "drag-prompt",
+        "purpose": "See DESIGN.md Typography for shipped usage."
+      }
+    },
+    "shadows": [
+      {
+        "name": "place-selection-line",
+        "value": "inset 1px 0 var(--primary)",
+        "purpose": "选中地点行的内侧线。"
+      },
+      {
+        "name": "map-pin-legibility",
+        "value": "drop-shadow(0 1px 1px var(--marker-shadow))",
+        "purpose": "随主题变化的地图针投影；不作为面板阴影。"
+      }
+    ],
+    "motion": [],
+    "breakpoints": [
+      {
+        "name": "mobile",
+        "value": "700px"
+      },
+      {
+        "name": "intermediate",
+        "value": "1100px"
+      }
+    ],
+    "themes": {
+      "default": "dark",
+      "persistence": "ride-map-theme in browser localStorage",
+      "lightPreview": "Explicit light- tokens; component snippets use live variables with dark fallbacks.",
+      "basemap": {
+        "dark": "invert(1) hue-rotate(180deg)",
+        "light": "none"
+      }
+    }
+  },
+  "components": [
+    {
+      "name": "导入按钮",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "空状态中的主要操作。",
+      "html": "<button class=\"ds-import\">选择数据文件</button>",
+      "css": ".ds-import{font:14px/1.5 -apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;min-height:42px;padding:8px 14px;border:1px solid var(--primary,#75c8c3);border-radius:8px;background:var(--primary,#75c8c3);color:var(--on-primary,#142b2a);cursor:pointer}.ds-import:hover{background:var(--primary,#75c8c3);border-color:var(--primary,#75c8c3)}.ds-import:active{background:var(--primary,#75c8c3)}.ds-import:focus-visible{outline:2px solid var(--focus,#9fe4de);outline-offset:3px;}"
+    },
+    {
+      "name": "日期字段",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "日期弹层中的字段。",
+      "html": "<label class=\"ds-field-label\">开始日期<input class=\"ds-field\" type=\"date\"></label>",
+      "css": ".ds-field-label{font:14px/1.5 -apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;display:flex;flex-direction:column;gap:6px;color:var(--secondary,#b6c9c6)}.ds-field{font:14px/1.5 -apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;min-height:42px;padding:7px 10px;color:var(--ink,#edf5f2);background:var(--panel,#203235);border:1px solid var(--line,#4b6467);border-radius:8px}.ds-field:focus-visible{outline:2px solid var(--focus,#9fe4de);outline-offset:3px;}"
+    },
+    {
+      "name": "地点面板",
+      "kind": "card",
+      "refersTo": "place-panel",
+      "description": "按需打开的窄地点面板。",
+      "html": "<aside class=\"ds-panel\"><strong>常去地点</strong><p>选择地点查看相关路线。</p></aside>",
+      "css": ".ds-panel{font:14px/1.5 -apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;width:256px;background:var(--panel,#203235);color:var(--ink,#edf5f2);border:1px solid var(--line,#4b6467);border-radius:12px;overflow:hidden}.ds-panel strong{display:block;font-size:15px;font-weight:600;padding:12px 14px 8px}.ds-panel p{font-size:13px;padding:0 14px;color:var(--secondary,#b6c9c6)}"
+    },
+    {
+      "name": "选中地点",
+      "kind": "button",
+      "refersTo": "place-selected",
+      "description": "地点名称与结束次数同行显示。",
+      "html": "<button class=\"ds-place\" aria-pressed=\"true\"><span>示例地点</span><span>次数</span></button>",
+      "css": ".ds-place{font:14px/1.5 -apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;display:flex;align-items:center;justify-content:space-between;width:256px;min-height:46px;padding:8px;border:0;border-radius:7px;background:var(--selected,#31534f);color:var(--ink,#edf5f2);box-shadow:inset 1px 0 var(--primary,#75c8c3);cursor:pointer}.ds-place:hover{background:var(--hover,#30484b)}.ds-place:active{background:var(--active,#3b575a)}.ds-place:focus-visible{outline:2px solid var(--focus,#9fe4de);outline-offset:3px;}"
+    },
+    {
+      "name": "地图地点针",
+      "kind": "button",
+      "refersTo": "destination-marker",
+      "description": "小图标位于透明的大点击区域。",
+      "html": "<button class=\"ds-marker\" aria-label=\"示例地点\" aria-pressed=\"false\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.4\" stroke-linecap=\"round\" stroke-linejoin=\"round\" aria-hidden=\"true\"><path d=\"M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0\"/><circle cx=\"12\" cy=\"10\" r=\"3\"/></svg></button>",
+      "css": ".ds-marker{display:flex;align-items:center;justify-content:center;width:44px;height:44px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--marker,#a9eee4);cursor:pointer}.ds-marker svg{width:16px;height:16px;fill:var(--marker-fill,#203235);filter:drop-shadow(0 1px 1px var(--marker-shadow,#132022))}.ds-marker:hover{background:var(--selected,#31534f)}.ds-marker[aria-pressed=true] svg{width:19px;height:19px;color:var(--marker-selected,#e1fff8)}.ds-marker:focus-visible{outline:2px solid var(--focus,#9fe4de);outline-offset:3px;}"
+    }
+  ],
+  "narrative": {
+    "northStar": "安静的地图边框",
+    "overview": "地图是主画面。52px 顶栏保留标题、主题切换、导入、全图和地点入口。全部历史与当前地图的统计分开显示，日期和设置按需展开。默认深色，浅色可手动切换，选择保存在此浏览器。",
+    "keyCharacteristics": [
+      "深浅色控件与地图背景同步。",
+      "小图标、紧凑统计与默认收起的地点列表。",
+      "筛选与地点选择保留同一个地图实例。"
+    ],
+    "rules": [
+      {
+        "name": "The Theme Map Rule",
+        "body": "在线底图在浅色下保留 OpenStreetMap 原色，在深色下仅对瓦片使用本地 invert(1) hue-rotate(180deg)，不增加模糊或重采样滤镜。路线继续使用 Canvas lighter 混合增亮，浅色下增加深色衬线。",
+        "section": "colors"
+      }
+    ],
+    "dos": [
+      "Do 让地图保持主视觉，说明通过展开控件提供。",
+      "Do 将地图针的16px图形与44px点击区域分开设置。",
+      "Do 保留键盘焦点、可访问名称与减少动画支持。"
+    ],
+    "donts": [
+      "Don't 用大型地图针、编号气泡或常驻宽列表遮挡路线。",
+      "Don't 将 OilUI 或 Trail 设计参考描述成复制的源码。"
+    ]
+  }
+}

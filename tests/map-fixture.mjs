@@ -1,0 +1,7 @@
+const scale = 6371008.8 * Math.PI / 180;
+export function makeDataset(items) {
+  const rides = items.map(({ id, xy, date = '2026-01-01' }) => ({ id, source_month: '202601', started_at: `${date}T10:00:00Z`, ended_at: `${date}T10:10:00Z`, distance_m: 1000, duration_s: 600, energy_wh: null, track_kind: 'sampled', source_point_count: xy.length, map_status: 'included' }));
+  const tracks = items.map(({ id, xy }) => ({ ride_id: id, points: xy.map(([x, y], sequence) => ({ sequence, longitude: x / scale, latitude: y / scale, recorded_at: null, speed_mps: null })) }));
+  const n = rides.length;
+  return { format: 'ride-dataset', schema_version: 1, dataset_id: 'synthetic-map', generated_at: '2026-02-01T00:00:00Z', timezone: 'UTC', coordinate_system: 'unverified', selection: { statistics_scope: 'all_rides', map_from: null, map_rule: 'ride_start_at_or_after', allowed_track_kinds: ['sampled'] }, provenance: { source: 'synthetic_test_not_real_rides', snapshot_ids: [] }, rides, tracks, months: [{ month: '202601', reported_ride_count: n, reported_distance_m: n * 1000, listed_ride_count: n, listed_distance_m: n * 1000, list_complete: true }], summary: { ride_count: n, total_distance_m: n * 1000, known_distance_m: n * 1000, missing_distance_count: 0, reported_month_distance_m: n * 1000, map_ride_count: n, map_distance_m: n * 1000, map_point_count: tracks.reduce((n, t) => n + t.points.length, 0), map_exclusions: {} } };
+}

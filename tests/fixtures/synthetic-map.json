@@ -1,0 +1,753 @@
+{
+  "format": "ride-dataset",
+  "schema_version": 1,
+  "dataset_id": "synthetic-map",
+  "generated_at": "2026-02-01T00:00:00Z",
+  "timezone": "UTC",
+  "coordinate_system": "unverified",
+  "selection": {
+    "statistics_scope": "all_rides",
+    "map_from": null,
+    "map_rule": "ride_start_at_or_after",
+    "allowed_track_kinds": [
+      "sampled"
+    ]
+  },
+  "provenance": {
+    "source": "synthetic_test_not_real_rides",
+    "snapshot_ids": []
+  },
+  "rides": [
+    {
+      "id": "synthetic-01",
+      "source_month": "202601",
+      "started_at": "2026-01-01T10:00:00Z",
+      "ended_at": "2026-01-01T10:10:00Z",
+      "distance_m": 1000,
+      "duration_s": 600,
+      "energy_wh": null,
+      "track_kind": "sampled",
+      "source_point_count": 6,
+      "map_status": "included"
+    },
+    {
+      "id": "synthetic-02",
+      "source_month": "202601",
+      "started_at": "2026-01-02T10:00:00Z",
+      "ended_at": "2026-01-02T10:10:00Z",
+      "distance_m": 1000,
+      "duration_s": 600,
+      "energy_wh": null,
+      "track_kind": "sampled",
+      "source_point_count": 6,
+      "map_status": "included"
+    },
+    {
+      "id": "synthetic-03",
+      "source_month": "202601",
+      "started_at": "2026-01-03T10:00:00Z",
+      "ended_at": "2026-01-03T10:10:00Z",
+      "distance_m": 1000,
+      "duration_s": 600,
+      "energy_wh": null,
+      "track_kind": "sampled",
+      "source_point_count": 6,
+      "map_status": "included"
+    },
+    {
+      "id": "synthetic-04",
+      "source_month": "202601",
+      "started_at": "2026-01-04T10:00:00Z",
+      "ended_at": "2026-01-04T10:10:00Z",
+      "distance_m": 1000,
+      "duration_s": 600,
+      "energy_wh": null,
+      "track_kind": "sampled",
+      "source_point_count": 6,
+      "map_status": "included"
+    },
+    {
+      "id": "synthetic-05",
+      "source_month": "202601",
+      "started_at": "2026-01-05T10:00:00Z",
+      "ended_at": "2026-01-05T10:10:00Z",
+      "distance_m": 1000,
+      "duration_s": 600,
+      "energy_wh": null,
+      "track_kind": "sampled",
+      "source_point_count": 6,
+      "map_status": "included"
+    },
+    {
+      "id": "synthetic-06",
+      "source_month": "202601",
+      "started_at": "2026-01-06T10:00:00Z",
+      "ended_at": "2026-01-06T10:10:00Z",
+      "distance_m": 1000,
+      "duration_s": 600,
+      "energy_wh": null,
+      "track_kind": "sampled",
+      "source_point_count": 6,
+      "map_status": "included"
+    },
+    {
+      "id": "synthetic-07",
+      "source_month": "202601",
+      "started_at": "2026-01-07T10:00:00Z",
+      "ended_at": "2026-01-07T10:10:00Z",
+      "distance_m": 1000,
+      "duration_s": 600,
+      "energy_wh": null,
+      "track_kind": "sampled",
+      "source_point_count": 6,
+      "map_status": "included"
+    },
+    {
+      "id": "synthetic-08",
+      "source_month": "202601",
+      "started_at": "2026-01-08T10:00:00Z",
+      "ended_at": "2026-01-08T10:10:00Z",
+      "distance_m": 1000,
+      "duration_s": 600,
+      "energy_wh": null,
+      "track_kind": "sampled",
+      "source_point_count": 6,
+      "map_status": "included"
+    },
+    {
+      "id": "synthetic-09",
+      "source_month": "202601",
+      "started_at": "2026-01-09T10:00:00Z",
+      "ended_at": "2026-01-09T10:10:00Z",
+      "distance_m": 1000,
+      "duration_s": 600,
+      "energy_wh": null,
+      "track_kind": "sampled",
+      "source_point_count": 6,
+      "map_status": "included"
+    },
+    {
+      "id": "synthetic-10",
+      "source_month": "202601",
+      "started_at": "2026-01-10T10:00:00Z",
+      "ended_at": "2026-01-10T10:10:00Z",
+      "distance_m": 1000,
+      "duration_s": 600,
+      "energy_wh": null,
+      "track_kind": "sampled",
+      "source_point_count": 6,
+      "map_status": "included"
+    },
+    {
+      "id": "synthetic-11",
+      "source_month": "202601",
+      "started_at": "2026-01-11T10:00:00Z",
+      "ended_at": "2026-01-11T10:10:00Z",
+      "distance_m": 1000,
+      "duration_s": 600,
+      "energy_wh": null,
+      "track_kind": "sampled",
+      "source_point_count": 6,
+      "map_status": "included"
+    },
+    {
+      "id": "synthetic-12",
+      "source_month": "202601",
+      "started_at": "2026-01-12T10:00:00Z",
+      "ended_at": "2026-01-12T10:10:00Z",
+      "distance_m": 1000,
+      "duration_s": 600,
+      "energy_wh": null,
+      "track_kind": "sampled",
+      "source_point_count": 6,
+      "map_status": "included"
+    }
+  ],
+  "tracks": [
+    {
+      "ride_id": "synthetic-01",
+      "points": [
+        {
+          "sequence": 0,
+          "longitude": 0,
+          "latitude": 0,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 1,
+          "longitude": 0.002697961091173614,
+          "latitude": 0,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 2,
+          "longitude": 0.005395922182347228,
+          "latitude": 0.0008993203637245379,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 3,
+          "longitude": 0.008093883273520841,
+          "latitude": 0.0008993203637245379,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 4,
+          "longitude": 0.010791844364694455,
+          "latitude": 0.0035972814548981516,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 5,
+          "longitude": 0.013489805455868068,
+          "latitude": 0.0035972814548981516,
+          "recorded_at": null,
+          "speed_mps": null
+        }
+      ]
+    },
+    {
+      "ride_id": "synthetic-02",
+      "points": [
+        {
+          "sequence": 0,
+          "longitude": 0,
+          "latitude": 0,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 1,
+          "longitude": 0.002697961091173614,
+          "latitude": 0,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 2,
+          "longitude": 0.005395922182347228,
+          "latitude": 0.0008993203637245379,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 3,
+          "longitude": 0.008093883273520841,
+          "latitude": 0.0008993203637245379,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 4,
+          "longitude": 0.010791844364694455,
+          "latitude": 0.0035972814548981516,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 5,
+          "longitude": 0.013489805455868068,
+          "latitude": 0.0035972814548981516,
+          "recorded_at": null,
+          "speed_mps": null
+        }
+      ]
+    },
+    {
+      "ride_id": "synthetic-03",
+      "points": [
+        {
+          "sequence": 0,
+          "longitude": 0,
+          "latitude": 0,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 1,
+          "longitude": 0.002697961091173614,
+          "latitude": 0,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 2,
+          "longitude": 0.005395922182347228,
+          "latitude": 0.0008993203637245379,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 3,
+          "longitude": 0.008093883273520841,
+          "latitude": 0.0008993203637245379,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 4,
+          "longitude": 0.010791844364694455,
+          "latitude": 0.0035972814548981516,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 5,
+          "longitude": 0.013489805455868068,
+          "latitude": 0.0035972814548981516,
+          "recorded_at": null,
+          "speed_mps": null
+        }
+      ]
+    },
+    {
+      "ride_id": "synthetic-04",
+      "points": [
+        {
+          "sequence": 0,
+          "longitude": 0,
+          "latitude": 0,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 1,
+          "longitude": 0.002697961091173614,
+          "latitude": 0,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 2,
+          "longitude": 0.005395922182347228,
+          "latitude": 0.0008993203637245379,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 3,
+          "longitude": 0.008093883273520841,
+          "latitude": 0.0008993203637245379,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 4,
+          "longitude": 0.010791844364694455,
+          "latitude": 0.0035972814548981516,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 5,
+          "longitude": 0.013489805455868068,
+          "latitude": 0.0035972814548981516,
+          "recorded_at": null,
+          "speed_mps": null
+        }
+      ]
+    },
+    {
+      "ride_id": "synthetic-05",
+      "points": [
+        {
+          "sequence": 0,
+          "longitude": 0,
+          "latitude": 0.005395922182347228,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 1,
+          "longitude": 0.002697961091173614,
+          "latitude": 0.005395922182347228,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 2,
+          "longitude": 0.005395922182347228,
+          "latitude": 0.0035972814548981516,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 3,
+          "longitude": 0.008093883273520841,
+          "latitude": 0.0008993203637245379,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 4,
+          "longitude": 0.010791844364694455,
+          "latitude": 0.0035972814548981516,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 5,
+          "longitude": 0.013489805455868068,
+          "latitude": 0.0035972814548981516,
+          "recorded_at": null,
+          "speed_mps": null
+        }
+      ]
+    },
+    {
+      "ride_id": "synthetic-06",
+      "points": [
+        {
+          "sequence": 0,
+          "longitude": 0,
+          "latitude": 0.005395922182347228,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 1,
+          "longitude": 0.002697961091173614,
+          "latitude": 0.005395922182347228,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 2,
+          "longitude": 0.005395922182347228,
+          "latitude": 0.0035972814548981516,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 3,
+          "longitude": 0.008093883273520841,
+          "latitude": 0.0008993203637245379,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 4,
+          "longitude": 0.010791844364694455,
+          "latitude": 0.0035972814548981516,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 5,
+          "longitude": 0.013489805455868068,
+          "latitude": 0.0035972814548981516,
+          "recorded_at": null,
+          "speed_mps": null
+        }
+      ]
+    },
+    {
+      "ride_id": "synthetic-07",
+      "points": [
+        {
+          "sequence": 0,
+          "longitude": 0,
+          "latitude": 0,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 1,
+          "longitude": 0.002697961091173614,
+          "latitude": 0,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 2,
+          "longitude": 0.005395922182347228,
+          "latitude": 0.0008993203637245379,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 3,
+          "longitude": 0.0062952425460717654,
+          "latitude": 0.0035972814548981516,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 4,
+          "longitude": 0.0062952425460717654,
+          "latitude": 0.0062952425460717654,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 5,
+          "longitude": 0.00899320363724538,
+          "latitude": 0.00899320363724538,
+          "recorded_at": null,
+          "speed_mps": null
+        }
+      ]
+    },
+    {
+      "ride_id": "synthetic-08",
+      "points": [
+        {
+          "sequence": 0,
+          "longitude": 0,
+          "latitude": 0,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 1,
+          "longitude": 0.002697961091173614,
+          "latitude": 0,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 2,
+          "longitude": 0.005395922182347228,
+          "latitude": 0.0008993203637245379,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 3,
+          "longitude": 0.0062952425460717654,
+          "latitude": 0.0035972814548981516,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 4,
+          "longitude": 0.0062952425460717654,
+          "latitude": 0.0062952425460717654,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 5,
+          "longitude": 0.00899320363724538,
+          "latitude": 0.00899320363724538,
+          "recorded_at": null,
+          "speed_mps": null
+        }
+      ]
+    },
+    {
+      "ride_id": "synthetic-09",
+      "points": [
+        {
+          "sequence": 0,
+          "longitude": 0,
+          "latitude": 0.005395922182347228,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 1,
+          "longitude": 0.002697961091173614,
+          "latitude": 0.005395922182347228,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 2,
+          "longitude": 0.005395922182347228,
+          "latitude": 0.0035972814548981516,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 3,
+          "longitude": 0.0062952425460717654,
+          "latitude": 0.0035972814548981516,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 4,
+          "longitude": 0.0062952425460717654,
+          "latitude": 0.0062952425460717654,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 5,
+          "longitude": 0.00899320363724538,
+          "latitude": 0.00899320363724538,
+          "recorded_at": null,
+          "speed_mps": null
+        }
+      ]
+    },
+    {
+      "ride_id": "synthetic-10",
+      "points": [
+        {
+          "sequence": 0,
+          "longitude": 0.013489805455868068,
+          "latitude": 0.0035972814548981516,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 1,
+          "longitude": 0.010791844364694455,
+          "latitude": 0.0035972814548981516,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 2,
+          "longitude": 0.008093883273520841,
+          "latitude": 0.0008993203637245379,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 3,
+          "longitude": 0.005395922182347228,
+          "latitude": 0.0008993203637245379,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 4,
+          "longitude": 0.002697961091173614,
+          "latitude": 0,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 5,
+          "longitude": 0,
+          "latitude": 0,
+          "recorded_at": null,
+          "speed_mps": null
+        }
+      ]
+    },
+    {
+      "ride_id": "synthetic-11",
+      "points": [
+        {
+          "sequence": 0,
+          "longitude": 0.00899320363724538,
+          "latitude": 0.00899320363724538,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 1,
+          "longitude": 0.0062952425460717654,
+          "latitude": 0.0062952425460717654,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 2,
+          "longitude": 0.0062952425460717654,
+          "latitude": 0.0035972814548981516,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 3,
+          "longitude": 0.005395922182347228,
+          "latitude": 0.0008993203637245379,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 4,
+          "longitude": 0.002697961091173614,
+          "latitude": 0,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 5,
+          "longitude": 0,
+          "latitude": 0,
+          "recorded_at": null,
+          "speed_mps": null
+        }
+      ]
+    },
+    {
+      "ride_id": "synthetic-12",
+      "points": [
+        {
+          "sequence": 0,
+          "longitude": 0.013489805455868068,
+          "latitude": 0.0035972814548981516,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 1,
+          "longitude": 0.010791844364694455,
+          "latitude": 0.0035972814548981516,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 2,
+          "longitude": 0.008093883273520841,
+          "latitude": 0.0008993203637245379,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 3,
+          "longitude": 0.005395922182347228,
+          "latitude": 0.0035972814548981516,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 4,
+          "longitude": 0.002697961091173614,
+          "latitude": 0.005395922182347228,
+          "recorded_at": null,
+          "speed_mps": null
+        },
+        {
+          "sequence": 5,
+          "longitude": 0,
+          "latitude": 0.005395922182347228,
+          "recorded_at": null,
+          "speed_mps": null
+        }
+      ]
+    }
+  ],
+  "months": [
+    {
+      "month": "202601",
+      "reported_ride_count": 12,
+      "reported_distance_m": 12000,
+      "listed_ride_count": 12,
+      "listed_distance_m": 12000,
+      "list_complete": true
+    }
+  ],
+  "summary": {
+    "ride_count": 12,
+    "total_distance_m": 12000,
+    "known_distance_m": 12000,
+    "missing_distance_count": 0,
+    "reported_month_distance_m": 12000,
+    "map_ride_count": 12,
+    "map_distance_m": 12000,
+    "map_point_count": 72,
+    "map_exclusions": {}
+  }
+}

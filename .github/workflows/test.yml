@@ -23,6 +23,8 @@ jobs:
       - run: ./scripts/setup.sh
       - run: .venv/bin/python -m unittest discover -s tests -v
       - run: ./run validate examples/ride-dataset.json
+      - name: Verify map calculations
+        run: node --test tests/map-model.test.mjs
       - name: Verify repository contains no runtime data
         shell: bash
         run: |
