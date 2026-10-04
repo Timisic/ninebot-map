@@ -1,14 +1,14 @@
+# Ninebot Map
+
+采集九号骑行数据，在本机查看轨迹地图，导出 CSV 和 JSON，并通过 GitHub Actions 定期同步。
+
+九号官方只提供最近 180 天的详细轨迹数据。
+
 <!-- ninebot-track-image:start -->
 
 ![骑行轨迹](assets/ninebot-tracks.png)
 
 <!-- ninebot-track-image:end -->
-
-# Ninebot Map
-
-采集九号骑行数据，在本机查看轨迹地图，导出 CSV 和 JSON，并通过 GitHub Actions 定期同步。
-
-九号官方提供最近 180 天的详细轨迹数据。
 
 ## 开始使用
 
