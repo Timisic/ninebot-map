@@ -108,3 +108,12 @@ test('date filters preserve place labels while limiting counts and highlighted r
   assert.equal(resolvePlaceLabel(place, labels), '新名称');
   assert.equal(resolvePlaceLabel(model.select().destinations[0], labels), '新名称');
 });
+
+test('public map keeps aggregates separate and rejects unreadable update timestamps and totals', () => {
+  const local = makeDataset([{ id: 'one', xy: [[0, 0], [100, 0]] }]);
+  const data = { format: 'public-ride-map', schema_version: 1, dataset_id: 'ninebot-public-map', updated_at: local.generated_at, timezone: local.timezone, coordinate_system: local.coordinate_system, summary: local.summary, tracks: [{ id: 'r_' + 'a'.repeat(24), date: '2026-01-01', distance_m: 1000, points: [[0, 0], [local.tracks[0].points[1].longitude, 0]] }] };
+  assert.equal(readRideMap(data).select().rideCount, 1);
+  assert.deepEqual(readRideMap(data).totals, local.summary);
+  assert.throws(() => readRideMap({ ...data, updated_at: '2026-10-05 08:00:00+00:00' }), /时间/);
+  assert.throws(() => readRideMap({ ...data, summary: { ...data.summary, total_distance_m: 0, known_distance_m: 0, missing_distance_count: 999 } }), /里程/);
+});

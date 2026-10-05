@@ -114,18 +114,12 @@ try {
   assert.equal((await doctor(url, fresh)).etag, freshSnapshot.etag);
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   assert.match(await page.locator('#history-stat').textContent(), /2 次/);
-  await page.locator('#file').setInputFiles({ name: 'manual.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(old)) });
-  await page.waitForFunction(() => document.querySelector('#history-stat').textContent.includes('1 次'));
-  await replace(fresh);
-  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-  await page.waitForTimeout(250);
-  assert.match(await page.locator('#history-stat').textContent(), /1 次/);
-  await record('Manual file import retained despite server replacement', { history: await page.locator('#history-stat').textContent() });
+  assert.equal(await page.locator('input[type=file], #import-button').count(), 0);
   assert.deepEqual(external, []);
   assert.deepEqual(errors, []);
   proof.passed = true;
   await record('No external requests or page errors', { external, errors });
-  console.log('Synthetic browser refresh passed: live update, date/grid/labels/view retained, invalid update retained, manual import retained, zero external requests.');
+  console.log('Synthetic browser refresh passed: live update, date/grid/labels/view retained, invalid update retained, no manual import, zero external requests.');
 } catch (error) {
   await record('Failed verification', { message: error.message });
   throw error;

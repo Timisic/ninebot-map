@@ -4,6 +4,7 @@
 | --- | --- |
 | 地图使用、统计口径与交互 | [地图说明](map-viewer.md) |
 | 采集、本地下载与公开发布 | [运行说明](operations.md) |
+| 静态只读网站与数据发布 | [静态部署](static-deployment.md) |
 | 数据契约与示例 | [数据格式](data-format.md) |
 | 档案与采集模块 | [架构](architecture.md) |
 | 项目术语 | [领域上下文](CONTEXT.md) |

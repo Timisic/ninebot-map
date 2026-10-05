@@ -1,6 +1,7 @@
 """Synthetic cloud state, merge, due-time and image fixtures. No production account."""
 import copy
 import io
+import json
 import tempfile
 import subprocess
 import sys
@@ -60,6 +61,29 @@ class CloudTests(unittest.TestCase):
         self.payload = checkpoint(self.config, self.data, self.session['revision'])
     def tearDown(self):
         self.temp.cleanup()
+
+    def test_site_failure_keeps_success_clock_and_retries_publication(self):
+        from nbmap.cloud import worker
+        for failure in (True, False):
+            with self.subTest(failure=failure):
+                root = self.root / ('worker-failed' if failure else 'worker-success')
+                root.mkdir()
+                write_json(root / 'sync-settings.json', {'interval_days': 10, 'publish_repos': [], 'site': {'host': 'example.invalid'}})
+                (root / 'github-known-hosts').write_text('synthetic public host key')
+                updated = copy.deepcopy(self.payload)
+                updated['files']['sessions/schedule-state.json'] = {'status': 'success', 'last_success': NOW.isoformat(), 'publication_pending': True}
+                def git(args, **kwargs):
+                    if args[:2] == ['git', 'worktree']:
+                        (root / 'work/state-publish').mkdir(parents=True)
+                    return subprocess.CompletedProcess(args, 0, stdout=seal(self.payload, self.key) if args[:2] == ['git', 'show'] else b'', stderr=b'')
+                log = io.StringIO()
+                with patch.dict('os.environ', {'CLOUD_STATE_KEY': self.key.decode(), 'NINEBOT_SESSION': json.dumps(self.session)}), patch('nbmap.cloud.command', side_effect=git), patch('nbmap.cloud.execute_worker', return_value=(updated, 0, [self.archive.path / 'prepared/dataset.json'])), patch('nbmap.cloud.publish_image'), patch('nbmap.cloud.publish_site_data', side_effect=RuntimeError('PRIVATE_SENTINEL') if failure else None), redirect_stdout(log):
+                    self.assertEqual(worker(root), 1 if failure else 0)
+                state = unseal((root / 'work/state-publish/state.enc').read_bytes(), self.key)['files']['sessions/schedule-state.json']
+                self.assertEqual(state['last_success'], NOW.isoformat())
+                self.assertEqual(state['publication_pending'], failure)
+                self.assertEqual('site_published_at' in state, not failure)
+                self.assertNotIn('PRIVATE_SENTINEL', log.getvalue())
 
     def test_authenticated_compact_roundtrip_and_no_plaintext(self):
         blob = seal(self.payload, self.key)

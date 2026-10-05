@@ -88,6 +88,41 @@ function validate(data) {
   return computed;
 }
 
+function validatePublic(data) {
+  assert(data.schema_version === 1 && data.dataset_id === 'ninebot-public-map', '公开地图格式无效');
+  timestamp(data.updated_at);
+  assert(typeof data.timezone === 'string', '缺少 IANA 时区');
+  try { new Intl.DateTimeFormat('en', { timeZone: data.timezone }).format(); } catch { fail('无效的 IANA 时区'); }
+  assert(['unverified', 'wgs84', 'gcj02', 'bd09'].includes(data.coordinate_system), '未知坐标系声明');
+  assert(Array.isArray(data.tracks) && data.tracks.length <= LIMITS.rides, '公开轨迹超限');
+  const ids = new Set(); let points = 0;
+  for (const track of data.tracks) {
+    assert(object(track) && /^r_[a-f0-9]{24}$/.test(track.id) && !ids.has(track.id), '公开轨迹标识无效');
+    ids.add(track.id);
+    assert(typeof track.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(track.date), '公开轨迹日期无效');
+    timestamp(`${track.date}T00:00:00Z`);
+    assert(number(track.distance_m, true), '公开轨迹里程无效');
+    assert(Array.isArray(track.points) && track.points.length >= 2, '公开轨迹点无效');
+    points += track.points.length;
+    assert(points <= LIMITS.points, '公开轨迹点超限');
+    for (const point of track.points) assert(Array.isArray(point) && point.length === 2 && point.every(Number.isFinite) && Math.abs(point[0]) <= 180 && Math.abs(point[1]) <= 90, '无效经纬度');
+  }
+  const summary = data.summary;
+  assert(object(summary), '缺少公开汇总');
+  for (const key of ['ride_count', 'map_ride_count', 'map_point_count', 'missing_distance_count']) assert(integer(summary[key]), '公开计数无效');
+  for (const key of ['total_distance_m', 'known_distance_m', 'reported_month_distance_m', 'map_distance_m']) assert(number(summary[key], true), '公开里程无效');
+  assert(object(summary.map_exclusions) && Object.entries(summary.map_exclusions).every(([key, value]) => ['before_map_start', 'unknown_start_time', 'simplified', 'insufficient_points'].includes(key) && integer(value)), '公开排除计数无效');
+  assert(summary.map_ride_count === ids.size && summary.map_point_count === points && summary.map_distance_m === sum(data.tracks.map(track => track.distance_m)), '公开轨迹与汇总不一致');
+  assert(summary.ride_count === ids.size + Object.values(summary.map_exclusions).reduce((a, b) => a + b, 0), '公开历史与范围不一致');
+  const missing = data.tracks.filter(track => track.distance_m === null).length;
+  const known = sumKnown(data.tracks.map(track => track.distance_m));
+  const excluded = summary.ride_count - ids.size;
+  assert(summary.missing_distance_count >= missing && summary.missing_distance_count <= missing + excluded, '公开缺失里程计数不一致');
+  assert(number(summary.known_distance_m) && summary.known_distance_m >= known && (excluded !== 0 || summary.known_distance_m === known), '公开已知里程不一致');
+  assert(summary.missing_distance_count > 0 ? summary.total_distance_m === null : summary.total_distance_m === summary.known_distance_m, '公开总里程与缺失状态不一致');
+  return summary;
+}
+
 // Half-open cells own their lower/left boundaries; corner crossings add no side cells.
 export function segmentCells(a, b, size = GRID_METERS) {
   const cuts = [0, 1];
@@ -183,10 +218,12 @@ export function readRideMap(input, interpretation) {
     assert(new TextEncoder().encode(input).length <= LIMITS.bytes, '文件超过 40 MB 上限');
     try { data = JSON.parse(input); } catch { fail('JSON 格式无效，请选择完整数据集'); }
   } else data = input;
-  const totals = Object.freeze(validate(data));
+  const publicMap = object(data) && data.format === 'public-ride-map';
+  const totals = Object.freeze(publicMap ? validatePublic(data) : validate(data));
+  const sourceTracks = publicMap ? data.tracks.map(track => ({ ride_id: track.id, points: track.points.map(([longitude, latitude]) => ({ longitude, latitude })) })) : data.tracks;
   const crs = interpretation ?? data.coordinate_system;
   assert(['unverified', 'wgs84', 'gcj02', 'bd09'].includes(crs), '未知坐标解释');
-  const displayTracks = data.tracks.map(track => ({ ...track, points: track.points.map(point => {
+  const displayTracks = sourceTracks.map(track => ({ ...track, points: track.points.map(point => {
     const [longitude, latitude] = displayCoordinate(point.longitude, point.latitude, crs);
     return { ...point, longitude, latitude };
   }) }));
@@ -195,8 +232,8 @@ export function readRideMap(input, interpretation) {
     minLon = Math.min(minLon, point.longitude); maxLon = Math.max(maxLon, point.longitude);
     minLat = Math.min(minLat, point.latitude); maxLat = Math.max(maxLat, point.latitude);
   }
-  if (data.tracks.length) assert(maxLon - minLon <= 3 && maxLat - minLat <= 3 && Math.max(Math.abs(minLat), Math.abs(maxLat)) <= 75, '此本地网格仅支持经纬跨度各不超过 3°、纬度 ±75° 内的区域；请拆分跨区域或跨日期变更线数据');
-  const origin = data.tracks.length ? [(minLon + maxLon) / 2, (minLat + maxLat) / 2] : [0, 0];
+  if (sourceTracks.length) assert(maxLon - minLon <= 3 && maxLat - minLat <= 3 && Math.max(Math.abs(minLat), Math.abs(maxLat)) <= 75, '此本地网格仅支持经纬跨度各不超过 3°、纬度 ±75° 内的区域；请拆分跨区域或跨日期变更线数据');
+  const origin = sourceTracks.length ? [(minLon + maxLon) / 2, (minLat + maxLat) / 2] : [0, 0];
   const xScale = METERS_PER_DEGREE * Math.cos(origin[1] * Math.PI / 180);
   const project = point => [(point.longitude - origin[0]) * xScale, (point.latitude - origin[1]) * METERS_PER_DEGREE];
   const unproject = (x, y) => [origin[1] + y / METERS_PER_DEGREE, origin[0] + x / xScale];
@@ -206,7 +243,7 @@ export function readRideMap(input, interpretation) {
     const parts = Object.fromEntries(dateFormatter.formatToParts(new Date(value)).map(p => [p.type, p.value]));
     return `${parts.year}-${parts.month}-${parts.day}`;
   };
-  const ridesById = new Map(data.rides.map(ride => [ride.id, Object.freeze({ id: ride.id, distance: ride.distance_m, date: dateFor(ride.started_at) })]));
+  const ridesById = new Map((publicMap ? data.tracks : data.rides).map(ride => [ride.id, Object.freeze({ id: ride.id, distance: ride.distance_m, date: publicMap ? ride.date : dateFor(ride.started_at) })]));
   const tracks = [], endpoints = [];
   let gaps = 0, expansion = 0;
   for (const track of displayTracks.slice().sort((a, b) => a.ride_id.localeCompare(b.ride_id, 'en'))) {
@@ -248,5 +285,5 @@ export function readRideMap(input, interpretation) {
     }).filter(p => p.count).sort((a, b) => b.count - a.count || a.id.localeCompare(b.id, 'en'));
     return { tracks: visible, passages, destinations: places, rideCount: visible.length, distance: sum(visible.map(t => t.distance)) };
   };
-  return Object.freeze({ datasetId: data.dataset_id, declaredCrs: data.coordinate_system, interpretation: crs, timezone: data.timezone, totals, diagnostics: Object.freeze({ gaps, excluded: data.rides.length - tracks.length }), dateBounds: Object.freeze([dates[0] || '', dates.at(-1) || '']), destinations, select, cellAt(latitude, longitude) { const xy = project({ latitude, longitude }); return `${Math.floor(xy[0] / GRID_METERS)},${Math.floor(xy[1] / GRID_METERS)}`; }, cellBounds(key) { const [x, y] = key.split(',').map(Number); return [unproject(x * GRID_METERS, y * GRID_METERS), unproject((x + 1) * GRID_METERS, (y + 1) * GRID_METERS)]; } });
+  return Object.freeze({ datasetId: data.dataset_id, updatedAt: data.updated_at || data.generated_at, declaredCrs: data.coordinate_system, interpretation: crs, timezone: data.timezone, totals, diagnostics: Object.freeze({ gaps, excluded: totals.ride_count - tracks.length }), dateBounds: Object.freeze([dates[0] || '', dates.at(-1) || '']), destinations, select, cellAt(latitude, longitude) { const xy = project({ latitude, longitude }); return `${Math.floor(xy[0] / GRID_METERS)},${Math.floor(xy[1] / GRID_METERS)}`; }, cellBounds(key) { const [x, y] = key.split(',').map(Number); return [unproject(x * GRID_METERS, y * GRID_METERS), unproject((x + 1) * GRID_METERS, (y + 1) * GRID_METERS)]; } });
 }

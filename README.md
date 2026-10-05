@@ -47,22 +47,23 @@ cd ninebot-map
 ./run cloud disable                   # 停用云端调度
 ```
 
-默认每 10 天同步一次，GitHub Actions 每小时检查到期时间。会话和完整历史档案加密保存在独立私有仓库，公开仓库更新轨迹 PNG 和 README 图片。
+默认每 10 天同步一次，GitHub Actions 每天北京时间 10:17 左右检查到期时间。会话和完整历史档案加密保存在独立私有仓库，公开仓库更新轨迹 PNG 和 README 图片。
 
 在本机运行 `cloud map` 或 `cloud pull` 下载最新数据，已打开的地图随后刷新。需要重新登录时，运行 `./run login`、`./run cloud credentials` 和 `./run cloud run`。
 
-## 导入本地数据
+## 查看地图与静态导出
 
 ```bash
-./run map --empty                      # 打开空白导入页
 ./run map --dataset /path/to/dataset.json
 ./run map --dataset tests/fixtures/synthetic-map.json --no-open
 ```
 
-地图会自动打开浏览器，默认地址为 `http://127.0.0.1:8765/`。保留终端运行，按 Ctrl-C 关闭服务。没有可自动选择的数据时显示导入页。
+地图会自动打开浏览器，默认地址为 `http://127.0.0.1:8765/`。保留终端运行，按 Ctrl-C 关闭服务。没有可用标准数据时，先运行采集或云端下载。网页不再提供手动导入。
 
 地图统一使用原始坐标。“图层”只保留道路底图和经过次数两个开关。默认无底图，开启道路底图后叠加道路预览。
 
 会话存于 `.private/`，采集档案存于 `data/`，两个目录均由 Git 忽略。曾在 macOS 安装本机定时同步时，程序可能将它们移到 `~/Library/Application Support/Ninebot Map/<标识>/`，并在项目里保留符号链接。终端显示这个路径属于本地保存，不是云端上传。仍可在项目根目录运行 `./run map`。详见[本地存储说明](docs/operations.md#本地存储与地图入口)。
 
 [项目文档](docs/README.md) · [地图说明](docs/map-viewer.md) · [MIT License](LICENSE)
+
+导出静态网站使用 `./run export-site --dataset /path/to/dataset.json --output /path/to/new-site`。公开数据仅含地图展示字段，部署与自动更新见[静态部署说明](docs/static-deployment.md)。

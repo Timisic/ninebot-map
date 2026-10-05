@@ -1,4 +1,4 @@
-import { readRideMap, LIMITS, resolvePlaceLabel } from './model.mjs';
+import { readRideMap, resolvePlaceLabel } from './model.mjs';
 import { createRouteLayer, createBasemap } from './map-layer.mjs';
 import { icon } from './icons.mjs';
 import { installWheelZoom } from './wheel-zoom.mjs';
@@ -10,9 +10,9 @@ map.attributionControl.setPrefix(false);
 L.control.zoom({ position: 'bottomright' }).addTo(map);
 installWheelZoom(map);
 const routeLayer = createRouteLayer(map), markers = L.layerGroup().addTo(map);
-let state = { phase: 'idle', model: null, source: null, view: null, selected: null, editing: null, labels: {}, storageKey: null };
+let state = { phase: 'idle', model: null, view: null, selected: null, editing: null, labels: {}, storageKey: null };
 let tiles = null, importVersion = 0;
-let followServer = true, serverRevision = null, refreshBusy = false;
+let serverRevision = null, refreshBusy = false;
 /** @typedef {'light' | 'dark'} Theme */
 /** @type {Theme} */
 let theme = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
@@ -53,12 +53,11 @@ window.addEventListener('keydown', event => {
   if ($('map-options').open || $('date-panel').open) { $('map-options').open = false; $('date-panel').open = false; }
   else { setSidebar(false); $('toggle-places').focus(); }
 });
-$('import-button').prepend(icon('upload'));
 for (const summary of document.querySelectorAll('#date-panel>summary, #map-options>summary, .place-method>summary')) summary.append(icon('chevron-down'));
 function stopTiles() {
   if (tiles) { map.removeLayer(tiles); tiles.off(); tiles = null; }
   map.setMaxZoom(19);
-  $('basemap').checked = false; $('map').classList.remove('online-basemap'); render(); $('local-status').textContent = '本地数据';
+  $('basemap').checked = false; $('map').classList.remove('online-basemap'); render(); $('local-status').textContent = '骑行记录';
 }
 function fit() {
   if (!state.view?.tracks.length) return;
@@ -113,7 +112,7 @@ function render() {
     $('place-label').setAttribute('aria-label', `为${selectedPlace.defaultLabel}命名`);
   }
   $('empty').hidden = view.rideCount > 0;
-  if (!view.rideCount) { $('empty-title').textContent = model.totals.map_ride_count ? '这段日期暂无轨迹' : '历史已保留，暂无地图轨迹'; $('empty-description').textContent = model.totals.map_ride_count ? '调整日期，或选择全部日期查看已导入的采样轨迹。' : '缺失、单点与简化轨迹不连线。可导入包含采样轨迹的数据集。'; $('empty-import').hidden = model.totals.map_ride_count > 0; }
+  if (!view.rideCount) { $('empty-title').textContent = model.totals.map_ride_count ? '这段日期暂无轨迹' : '历史已保留，暂无地图轨迹'; $('empty-description').textContent = model.totals.map_ride_count ? '调整日期，或选择全部日期查看当前采样轨迹。' : '缺失、单点与简化轨迹不连线。等待后续可用采样轨迹。';  }
 
 }
 function filter() {
@@ -121,11 +120,13 @@ function filter() {
   try { const view = state.model.select({ from: $('from').value, to: $('to').value }); state = { ...state, view }; showError(''); render(); }
   catch (error) { showError(`${error.message}。保留上一有效范围。`); }
 }
+async function hashText(text) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(digest)].map(n => n.toString(16).padStart(2, '0')).join('');
+}
 async function loadLabels(model) {
   const keys = await Promise.all(['unverified', 'wgs84'].map(async interpretation => {
-    const bytes = new TextEncoder().encode(`${model.datasetId}|${interpretation}|destinations-fixed-anchor-100m-v1`);
-    const digest = await crypto.subtle.digest('SHA-256', bytes);
-    return 'ride-map-labels:' + [...new Uint8Array(digest)].map(n => n.toString(16).padStart(2, '0')).join('');
+    return 'ride-map-labels:' + await hashText(`${model.datasetId}|${interpretation}|destinations-fixed-anchor-100m-v1`);
   }));
   const storageKey = keys[0];
   let labels = Object.create(null);
@@ -137,7 +138,7 @@ async function loadLabels(model) {
   } catch { $('label-note').textContent = '本地存储不可用，名称仅保留到关闭页面。'; }
   return { storageKey, legacyStorageKey: keys[1], labels };
 }
-async function importText(text, range = { from: '', to: '' }, fitView = true) {
+async function loadDataset(text, range = { from: '', to: '' }, fitView = true) {
   const version = ++importVersion;
   state = { ...state, phase: 'loading' }; $('local-status').textContent = '正在读取…'; showError('');
   await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
@@ -145,24 +146,18 @@ async function importText(text, range = { from: '', to: '' }, fitView = true) {
     const model = readRideMap(text, 'unverified');
     const saved = await loadLabels(model);
     if (version !== importVersion) return;
-    stopTiles(); state = { phase: 'ready', model, source: text, view: model.select(range), selected: null, editing: null, ...saved };
+    stopTiles(); state = { phase: 'ready', model, view: model.select(range), selected: null, editing: null, ...saved };
     for (const id of ['from', 'to', 'clear-dates', 'show-grid', 'basemap', 'fit']) $(id).disabled = false;
     for (const id of ['from', 'to']) { $(id).value = range[id] || ''; $(id).min = model.dateBounds[0]; $(id).max = model.dateBounds[1]; }
-    $('empty-import').hidden = false; render(); if (fitView) fit();
+    $('updated-at').textContent = '更新于 ' + new Intl.DateTimeFormat('zh-CN', { timeZone: model.timezone, dateStyle: 'short', timeStyle: 'short' }).format(new Date(model.updatedAt));
+    render(); if (fitView) fit();
     return true;
   } catch (error) {
     if (version !== importVersion) return;
-    state = { ...state, phase: 'error' }; showError(`导入失败：${error.message}${state.model ? '。已保留上一份有效地图。' : ''}`);
+    state = { ...state, phase: 'error' }; showError(`数据读取失败：${error.message}${state.model ? '。已保留上一份有效地图。' : ''}`);
     if (state.model) render(); else $('local-status').textContent = '等待数据';
   }
 }
-async function importFile(file) {
-  if (!file) return;
-  if (file.size > LIMITS.bytes) { showError('文件超过 40 MB 上限，请缩小数据集。上一份地图保持不变。'); return; }
-  try { if (await importText(await file.text())) followServer = false; } catch { showError('无法读取文件，请重新选择。'); }
-}
-$('import-button').addEventListener('click', () => $('file').click()); $('empty-import').addEventListener('click', () => $('file').click());
-$('file').addEventListener('change', async event => { await importFile(event.target.files[0]); event.target.value = ''; });
 $('fit').addEventListener('click', fit);
 $('toggle-places').addEventListener('click', () => setSidebar($('toggle-places').getAttribute('aria-expanded') !== 'true'));
 for (const id of ['from', 'to']) $(id).addEventListener('change', filter);
@@ -198,7 +193,7 @@ function updateBasemap() {
   map.setMaxZoom(tiles.options.maxZoom);
   tiles.on('tileerror', () => showError('在线底图未能加载。轨迹仍可使用，也可关闭底图恢复离线。'));
   $('map').classList.add('online-basemap'); render();
-  $('local-status').textContent = '道路底图 · 本地轨迹';
+  $('local-status').textContent = '道路预览';
 }
 $('basemap').addEventListener('change', updateBasemap);
 function showCell(event) {
@@ -207,44 +202,42 @@ function showCell(event) {
   $('cell-info').hidden = false; $('cell-info').replaceChildren(Object.assign(document.createElement('strong'), {textContent: count}), '次行程经过这个区域');
 }
 map.on('mousemove click', showCell); map.on('mouseout', () => { $('cell-info').hidden = true; });
-let dragDepth = 0;
-window.addEventListener('dragenter', event => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); dragDepth++; $('workspace').classList.add('dragging-file'); } });
-window.addEventListener('dragover', event => { event.preventDefault(); });
-window.addEventListener('dragleave', () => { if (--dragDepth <= 0) $('workspace').classList.remove('dragging-file'); });
-window.addEventListener('drop', event => { event.preventDefault(); dragDepth = 0; $('workspace').classList.remove('dragging-file'); importFile(event.dataTransfer.files[0]); });
 const observer = new ResizeObserver(() => map.invalidateSize({ animate: false })); observer.observe($('map'));
 window.addEventListener('pagehide', () => { clearInterval(refreshTimer); observer.disconnect(); stopTiles(); routeLayer.remove(); map.remove(); }, { once: true });
 try {
-  const response = await fetch('/dataset.json', { cache: 'no-store' });
+  const response = await fetch('./dataset.json', { cache: 'no-store' });
   if (response.ok) {
-    serverRevision = response.headers.get('ETag');
-    await importText(await response.text());
+    const text = await response.text();
+    serverRevision = response.headers.get('ETag') || await hashText(text);
+    await loadDataset(text);
     if (launch.get('basemap') === 'osm' && state.model) { $('basemap').checked = true; updateBasemap(); }
   }
-  else if (response.status !== 404) showError('启动数据未能读取，请使用导入按钮。');
-} catch { showError('本地服务未连接，仍可通过文件按钮导入数据。'); }
+  else if (response.status !== 404) showError('地图数据暂不可用，请稍后刷新。');
+} catch { showError('地图服务暂时无法连接，请稍后刷新。'); }
 
 async function refreshServer() {
-  if (!followServer || refreshBusy || document.hidden || state.phase === 'loading') return;
+  if (refreshBusy || document.hidden || state.phase === 'loading') return;
   refreshBusy = true;
   const requestVersion = importVersion;
   try {
-    const head = await fetch('/dataset.json', { method: 'HEAD', cache: 'no-store' });
+    const head = await fetch('./dataset.json', { method: 'HEAD', cache: 'no-store' });
     const revision = head.headers.get('ETag');
-    if (!head.ok || !revision || revision === serverRevision) return;
-    const response = await fetch('/dataset.json', { cache: 'no-store' });
+    if (!head.ok || (revision && revision === serverRevision)) return;
+    const response = await fetch('./dataset.json', { cache: 'no-store' });
     const text = await response.text();
-    if (!response.ok || !followServer || state.phase === 'loading' || requestVersion !== importVersion) return;
+    const nextRevision = response.headers.get('ETag') || await hashText(text);
+    if (nextRevision === serverRevision) return;
+    if (!response.ok || state.phase === 'loading' || requestVersion !== importVersion) return;
     const wasOnline = $('basemap').checked;
     const range = { from: $('from').value, to: $('to').value };
     const selection = { selected: state.selected, editing: state.editing, draft: $('place-label').value, datasetId: state.model?.datasetId };
-    if (await importText(text, range, false)) {
+    if (await loadDataset(text, range, false)) {
       if (state.model.datasetId === selection.datasetId && state.view.destinations.some(place => place.id === selection.selected)) {
         state.selected = selection.selected; state.editing = selection.editing; $('place-label').value = selection.draft; render();
       }
-      serverRevision = response.headers.get('ETag');
+      serverRevision = nextRevision;
       if (wasOnline && state.model) { $('basemap').checked = true; updateBasemap(); }
-      $('local-status').textContent = '本地数据已更新';
+      $('local-status').textContent = '数据已更新';
     }
   } catch { /* A temporary offline server leaves the visible map intact. */ }
   finally { refreshBusy = false; }

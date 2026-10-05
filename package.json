@@ -9,7 +9,8 @@
     "test:refresh": "node scripts/verify-auto-sync.mjs",
     "verify": "node scripts/verify.mjs",
     "verify:smoke": "node scripts/verify.mjs --suite smoke",
-    "verify:doctor": "node scripts/verify.mjs --doctor"
+    "verify:doctor": "node scripts/verify.mjs --doctor",
+    "test:static": "node scripts/verify-static.mjs"
   },
   "devDependencies": {
     "playwright": "1.58.2"

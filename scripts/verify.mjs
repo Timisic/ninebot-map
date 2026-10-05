@@ -11,6 +11,7 @@ const suites = [
   { id: 'model', command: process.execPath, args: ['--test', 'tests/map-model.test.mjs'], browser_required: false },
   { id: 'map', command: process.execPath, args: ['scripts/verify-map.mjs'], browser_required: true },
   { id: 'wheel', command: process.execPath, args: ['scripts/verify-wheel.mjs'], browser_required: true },
+  { id: 'static', command: process.execPath, args: ['scripts/verify-static.mjs'], browser_required: true },
   { id: 'refresh', command: process.execPath, args: ['scripts/verify-auto-sync.mjs'], browser_required: true },
 ];
 let selection = 'all', output, doctorOnly = false;
@@ -20,7 +21,7 @@ for (let index = 2; index < process.argv.length; index++) {
   else if (argument === '--suite' && process.argv[index + 1]) selection = process.argv[++index];
   else if (argument === '--output' && process.argv[index + 1]) output = path.resolve(process.argv[++index]);
   else if (argument === '--help') {
-    console.log('node scripts/verify.mjs [--doctor] [--suite all|smoke|structure|python|model|map|wheel|refresh] [--output DIRECTORY]');
+    console.log('node scripts/verify.mjs [--doctor] [--suite all|smoke|structure|python|model|map|wheel|refresh|static] [--output DIRECTORY]');
     process.exit(0);
   } else throw new Error(`Unknown or incomplete option: ${argument}`);
 }

@@ -52,6 +52,7 @@ jobs:
           node scripts/verify.mjs --suite map --output work/verification/ci-map
           node scripts/verify.mjs --suite wheel --output work/verification/ci-wheel
           node scripts/verify.mjs --suite refresh --output work/verification/ci-refresh
+          node scripts/verify.mjs --suite static --output work/verification/ci-static
       - name: Retain synthetic verification evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

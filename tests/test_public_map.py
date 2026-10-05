@@ -1,0 +1,164 @@
+import copy
+import json
+import tempfile
+import unittest
+import subprocess
+import sys
+import threading
+import http.client
+import importlib.util
+from pathlib import Path
+
+from nbmap.public_map import public_dataset, publish_dataset, export_site, validate_public
+from nbmap.map_server import ASSETS
+
+FIXTURE = Path(__file__).parent / 'fixtures/synthetic-map.json'
+
+
+class PublicMapTests(unittest.TestCase):
+    def setUp(self):
+        self.dataset = json.loads(FIXTURE.read_text())
+
+    def test_export_only_contains_map_fields_and_aggregate_history(self):
+        self.dataset['private_note'] = 'PRIVATE_SENTINEL'
+        self.dataset['rides'][0]['account'] = 'ACCOUNT_SENTINEL'
+        result = public_dataset(self.dataset)
+        raw = json.dumps(result)
+        for private in ['PRIVATE_SENTINEL', 'ACCOUNT_SENTINEL', self.dataset['dataset_id'], 'started_at', 'ended_at', 'source_month', 'snapshot_ids', 'duration_s', 'speed_mps']:
+            self.assertNotIn(private, raw)
+        self.assertEqual(result['summary'], self.dataset['summary'])
+        self.assertEqual(result['tracks'][0]['points'][0], [self.dataset['tracks'][0]['points'][0]['longitude'], self.dataset['tracks'][0]['points'][0]['latitude']])
+        self.assertRegex(result['tracks'][0]['date'], r'^\d{4}-\d{2}-\d{2}$')
+
+    def test_public_summary_includes_excluded_history_without_individual_records(self):
+        ride = self.dataset['rides'][0]
+        track = next(t for t in self.dataset['tracks'] if t['ride_id'] == ride['id'])
+        ride.update(track_kind='missing', source_point_count=0, map_status='insufficient_points')
+        self.dataset['tracks'].remove(track)
+        summary = self.dataset['summary']
+        summary['map_ride_count'] -= 1
+        summary['map_distance_m'] -= ride['distance_m']
+        summary['map_point_count'] -= len(track['points'])
+        summary['map_exclusions'] = {'insufficient_points': 1}
+        result = public_dataset(self.dataset)
+        self.assertEqual(result['summary']['ride_count'], 12)
+        self.assertEqual(len(result['tracks']), 11)
+        self.assertNotIn('rides', result)
+        self.assertNotIn('months', result)
+        self.assertEqual(result['summary']['map_exclusions'], {'insufficient_points': 1})
+
+    def test_opaque_existing_ids_remain_stable_for_destination_tie_breaks(self):
+        old = self.dataset['rides'][0]['id']
+        opaque = 'r_' + 'a' * 24
+        self.dataset['rides'][0]['id'] = opaque
+        next(t for t in self.dataset['tracks'] if t['ride_id'] == old)['ride_id'] = opaque
+        self.assertEqual(public_dataset(self.dataset)['tracks'][0]['id'], opaque)
+
+    def test_unknown_fields_and_invalid_summary_cannot_replace_live_data(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'dataset.json'
+            data = public_dataset(self.dataset)
+            publish_dataset(data, path)
+            original = path.read_bytes()
+            for mutate in [lambda d: d.update(updated_at='2026-10-05 08:00:00+00:00'), lambda d: d['summary'].update(total_distance_m=0, known_distance_m=0, missing_distance_count=999), lambda d: d.update(schema_version=True), lambda d: d.update(tokens='secret'), lambda d: d['tracks'][0].update(started_at='secret'), lambda d: d['summary'].update(map_ride_count=999), lambda d: d['tracks'][0]['points'].append([999, 0])]:
+                broken = copy.deepcopy(data)
+                mutate(broken)
+                with self.assertRaises(ValueError):
+                    publish_dataset(broken, path)
+                self.assertEqual(path.read_bytes(), original)
+            self.assertEqual(list(Path(directory).iterdir()), [path])
+
+    def test_static_folder_is_an_allowlist_and_cannot_overwrite_existing_export(self):
+        with tempfile.TemporaryDirectory() as directory:
+            site = Path(directory) / 'site'
+            export_site(self.dataset, site)
+            paths = {str(p.relative_to(site)) for p in site.rglob('*') if p.is_file()}
+            expected = {file for file, _ in ASSETS.values()} | {'dataset.json', 'vendor/leaflet/LICENSE', 'vendor/gcoord/LICENSE', 'vendor/lucide/LICENSE'}
+            self.assertEqual(paths, expected)
+            validate_public(json.loads((site / 'dataset.json').read_text()))
+            html = (site / 'index.html').read_text()
+            self.assertNotIn('type="file"', html)
+            self.assertNotIn('import-button', html)
+            self.assertIn('src="./app.mjs"', html)
+            with self.assertRaises(ValueError):
+                export_site(self.dataset, site)
+
+    def test_receiver_validates_stdin_and_rejects_old_or_private_payloads(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / 'public/dataset.json'
+            data = public_dataset(self.dataset)
+            def send(payload):
+                return subprocess.run([sys.executable, 'scripts/receive-public-map.py', '--target', str(target)], input=json.dumps(payload).encode(), capture_output=True)
+            self.assertEqual(send(data).returncode, 0)
+            original = target.read_bytes()
+            old = copy.deepcopy(data)
+            old['updated_at'] = '2020-01-01T00:00:00Z'
+            for payload in [old, {**data, 'tokens': 'PRIVATE_SENTINEL'}]:
+                result = send(payload)
+                self.assertEqual(result.returncode, 1)
+                self.assertNotIn(b'PRIVATE_SENTINEL', result.stderr)
+                self.assertEqual(target.read_bytes(), original)
+
+    def test_loopback_static_server_allows_only_get_head_and_exported_paths(self):
+        spec = importlib.util.spec_from_file_location('static_map_server', 'scripts/serve-public-map.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as directory:
+            site = export_site(self.dataset, Path(directory) / 'site')
+            current = Path(directory) / 'current'
+            current.symlink_to(site, target_is_directory=True)
+            server = module.create_server(current, 0)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                def request(path, method='GET'):
+                    client = http.client.HTTPConnection('127.0.0.1', server.server_port)
+                    client.request(method, path)
+                    response = client.getresponse()
+                    result = response.status, dict(response.headers), response.read()
+                    client.close()
+                    return result
+                self.assertEqual(server.server_address[0], '127.0.0.1')
+                self.assertEqual(request('/')[0], 200)
+                self.assertEqual(request('/index.html')[0], 200)
+                self.assertEqual(request('/dataset.json')[1]['ETag'], request('/dataset.json', 'HEAD')[1]['ETag'])
+                for path in ['/upload', '/import', '/.private/tokens.json', '/dataset.lock', '/data/', '/scripts/']:
+                    self.assertEqual(request(path)[0], 404)
+                for method in ['POST', 'PUT', 'PATCH', 'DELETE']:
+                    self.assertEqual(request('/dataset.json', method)[0], 405)
+                replacement = export_site(self.dataset, Path(directory) / 'replacement')
+                (replacement / 'styles.css').write_text('body { color: red; }')
+                pending = Path(directory) / 'next'
+                pending.symlink_to(replacement, target_is_directory=True)
+                pending.replace(current)
+                self.assertEqual(request('/styles.css')[2], b'body { color: red; }')
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join()
+
+    def test_publisher_sends_only_public_json_and_removes_temporary_identity(self):
+        from unittest.mock import patch
+        from nbmap.cloud import publish_site_data
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'private-dataset.json'
+            source.write_text(json.dumps(self.dataset))
+            calls = []
+            def send(args, **kwargs):
+                calls.append((args, kwargs))
+                key_path = Path(args[args.index('-i') + 1])
+                self.assertTrue(key_path.exists())
+                self.assertEqual(key_path.stat().st_mode & 0o777, 0o600)
+                validate_public(json.loads(kwargs['data']))
+                self.assertNotIn(b'snapshot_ids', kwargs['data'])
+            with patch.dict('os.environ', {'MAP_DEPLOY_KEY': 'synthetic-secret'}), patch('nbmap.cloud.command', side_effect=send):
+                publish_site_data(root, source, {'host': 'example.invalid', 'user': 'map', 'known_hosts': 'synthetic public host key'}, '2026-10-05T08:00:00Z')
+            self.assertEqual(len(calls), 1)
+            self.assertIn('StrictHostKeyChecking=yes', calls[0][0])
+            self.assertEqual(calls[0][0][-1], 'publish-map')
+            self.assertEqual(list(root.iterdir()), [source])
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -4,7 +4,7 @@ Use a fresh browser profile, synthetic fixtures and a random loopback port for e
 
 | Feature | Recipe | Verification command |
 | --- | --- | --- |
-| Dataset import and date range | [Import and filter](import-and-filter.md) | `npm run verify -- --suite map` |
+| Dataset loading and date range | [Load and filter](import-and-filter.md) | `npm run verify -- --suite map` |
 | Destination names and themes | [Labels and themes](labels-and-themes.md) | `npm run verify -- --suite map` |
 | Wheel input and coordinate interpretation | [Map controls](map-controls.md) | `npm run verify -- --suite wheel` and `--suite map` |
 | Map update after local data replacement | [Data refresh](data-refresh.md) | `npm run verify -- --suite refresh` |

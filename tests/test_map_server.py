@@ -122,8 +122,8 @@ class MapServerTests(unittest.TestCase):
 
     def test_cli_map_branches_before_credentials_or_client(self):
         with patch('nbmap.__main__.Client', side_effect=AssertionError('must not construct client')), patch('nbmap.__main__.private_dir', side_effect=AssertionError('must not read private directory')), patch('nbmap.map_server.serve_map', return_value=0) as serve:
-            self.assertEqual(main(['map', '--empty', '--no-open', '--port', '0']), 0)
-            serve.assert_called_once_with(None, 0, True)
+            self.assertEqual(main(['map', '--dataset', str(FIXTURE), '--no-open', '--port', '0']), 0)
+            serve.assert_called_once_with(FIXTURE, 0, True)
 
 
 class MapSourceTests(unittest.TestCase):
@@ -161,20 +161,21 @@ class MapSourceTests(unittest.TestCase):
         RideArchive.for_vehicle(self.data, 'not-prepared').path.mkdir()
         self.assertEqual(self.run_map(), selected)
 
-    def test_empty_ambiguous_and_missing_selected_use_importer(self):
-        self.assertIsNone(self.run_map())
+    def test_empty_ambiguous_and_missing_selected_require_prepared_data(self):
+        with self.assertRaises(ValueError):
+            self.run_map()
         self.dataset('one')
         self.dataset('two')
-        self.assertIsNone(self.run_map())
+        with self.assertRaises(ValueError):
+            self.run_map()
         (self.config / 'preferences.json').write_text(json.dumps({'sn': 'missing'}))
-        self.assertIsNone(self.run_map())
-        self.assertIsNone(self.run_map('--empty'))
+        with self.assertRaises(ValueError):
+            self.run_map()
 
-    def test_explicit_dataset_and_empty_do_not_read_preferences(self):
+    def test_explicit_dataset_does_not_read_preferences(self):
         selected = self.dataset('one')
         (self.config / 'preferences.json').write_text('{broken')
         self.assertEqual(self.run_map('--dataset', str(selected)), selected)
-        self.assertIsNone(self.run_map('--empty'))
 
     def test_latest_is_strict_and_preserves_prepare_behavior(self):
         with self.assertRaises(ValueError):

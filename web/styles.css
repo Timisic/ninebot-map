@@ -32,7 +32,6 @@ h2 { font-size: 16px; font-weight: 600; }
 .actions button { border-color: transparent; background: transparent; }
 #theme-toggle { width: 44px; height: 44px; display: grid; place-items: center; padding: 0; }
 #theme-toggle svg { width: 20px; height: 20px; }
-#import-button { display: inline-flex; align-items: center; gap: 6px; }
 #toggle-places { border-color: var(--line); padding-inline: 16px; border-radius: 22px; }
 #toggle-places[aria-pressed=true] { background: var(--selected); border-color: transparent; color: var(--primary); }
 #workspace { position: relative; height: calc(100dvh - 64px); min-height: 420px; overflow: hidden; }
@@ -113,12 +112,10 @@ h2 { font-size: 16px; font-weight: 600; }
 .places-hidden .empty-state { left: 50%; }
 .empty-state h2 { font-size: 20px; }
 .empty-state p { color: var(--secondary); margin: 12px 0 20px; line-height: 1.7; }
-#empty-import { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
 .cell-info { position: absolute; left: 24px; bottom: 74px; z-index: 600; padding: 10px 14px; background: var(--panel); box-shadow: var(--shadow); border-radius: 10px; pointer-events: none; }
 .cell-info strong { margin-right: 6px; }
 .error { position: absolute; top: 104px; left: 24px; right: calc(var(--sidebar) + 24px); z-index: 800; background: var(--error-panel); color: var(--error-ink); padding: 12px 16px; border: 1px solid var(--error-line); border-radius: 10px; }
 .places-hidden .error { right: 24px; }
-.dragging-file::after { content: '松开以导入本地数据'; position: absolute; inset: 0; z-index: 900; display: grid; place-content: center; background: var(--panel); border: 3px dashed var(--primary); font-size: 24px; }
 @media(max-width:1000px) and (min-width:701px) { :root { --sidebar: 290px; } .toolbar { left: 16px; max-width: calc(100% - var(--sidebar) - 32px); } .metrics { padding: 12px; } #date-panel>summary { padding-inline: 10px; } }
 @media(max-width:700px) {
  .topbar { height: 56px; padding: 0 12px; gap: 6px; }
@@ -167,3 +164,5 @@ h2 { font-size: 16px; font-weight: 600; }
  .label-row { flex-wrap: wrap; }
  .label-row input { flex-basis: 100%; }
 }
+
+#updated-at { color: var(--secondary); font-size: 11px; }

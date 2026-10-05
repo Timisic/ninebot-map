@@ -156,6 +156,26 @@ def publish_image(root, image, destinations):
         key_path.unlink(missing_ok=True)
 
 
+def publish_site_data(root, dataset, destination, updated_at):
+    from .public_map import public_dataset
+    host, user = destination['host'], destination['user']
+    port = destination.get('port', 22)
+    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9.-]*', host) or not re.fullmatch(r'[a-z_][a-z0-9_-]*', user) or type(port) is not int or not 1 <= port <= 65535:
+        raise ValueError('静态发布目标无效')
+    key = os.environ.get('MAP_DEPLOY_KEY', '')
+    if not key or not destination.get('known_hosts'):
+        raise ValueError('静态发布缺少专用密钥或已核对的主机公钥')
+    public = public_dataset(read_json(dataset), updated_at)
+    body = json.dumps(public, ensure_ascii=False, allow_nan=False, separators=(',', ':')).encode()
+    with tempfile.TemporaryDirectory(prefix='site-publish-', dir=root) as directory:
+        key_path, hosts_path = Path(directory) / 'identity', Path(directory) / 'known_hosts'
+        write_text(key_path, key.replace('\r\n', '\n').strip() + '\n')
+        write_text(hosts_path, destination['known_hosts'].strip() + '\n')
+        command(['ssh', '-T', '-i', str(key_path), '-p', str(port), '-o', 'IdentitiesOnly=yes', '-o', 'BatchMode=yes',
+                 '-o', 'StrictHostKeyChecking=yes', '-o', f'UserKnownHostsFile={hosts_path}',
+                 f'{user}@{host}', 'publish-map'], data=body, timeout=120)
+
+
 def execute_worker(payload, key, session, settings, root, *, force=False, source=None, now=None):
     restore(payload, root)
     config, data = root / 'sessions', root / 'data'
@@ -214,9 +234,13 @@ def worker(root):
             image = render_tracks(read_json(datasets[0]), temporary / 'tracks.png')
             shutil.copyfile(root / 'github-known-hosts', temporary / 'known-hosts')
             publish_image(temporary, image, settings.get('publish_repos', []))
+            if settings.get('site'):
+                publish_site_data(temporary, datasets[0], settings['site'], updated['files']['sessions/schedule-state.json']['last_success'])
             publication = updated['files']['sessions/schedule-state.json']
             publication['publication_pending'] = False
             publication.pop('publication_error', None)
+            if settings.get('site'):
+                publication['site_published_at'] = datetime.now(timezone.utc).isoformat()
             if settings.get('publish_repos'):
                 publication['image_published_at'] = datetime.now(timezone.utc).isoformat()
         except Exception as exc:
@@ -225,8 +249,8 @@ def worker(root):
             diagnostic = ({'operation': exc.operation, 'category': exc.category, 'exit_code': exc.exit_code}
                           if isinstance(exc, CommandFailure) else {'category': type(exc).__name__})
             updated['files']['sessions/schedule-state.json']['publication_error'] = diagnostic
-            print('Image publication diagnostic: ' + json.dumps(diagnostic))
-            print('Image publication incomplete; encrypted data remains recoverable. Publication will retry.')
+            print('Publication diagnostic: ' + json.dumps(diagnostic))
+            print('Publication incomplete; encrypted data remains recoverable. Publication will retry.')
     output = root / 'work' / 'state-publish'
     command(['git', 'worktree', 'add', '--detach', str(output), 'FETCH_HEAD'], cwd=root)
     (output / 'state.enc').write_bytes(seal(updated, key))
@@ -234,7 +258,7 @@ def worker(root):
     command(['git', '-c', 'user.name=Ninebot Map Sync', '-c', 'user.email=sync@users.noreply.github.com',
              'commit', '-m', 'Update encrypted sync state'], cwd=output)
     command(['git', 'push', 'origin', 'HEAD:state'], cwd=output)
-    print('Encrypted checkpoint saved. No plaintext ride data was published.')
+    print('Encrypted checkpoint saved. Only configured display outputs were published.')
     return code
 
 

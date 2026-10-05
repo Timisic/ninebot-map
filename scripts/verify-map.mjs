@@ -3,11 +3,16 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs/promises';
 import net from 'node:net';
+import path from 'node:path';
 import { chromium } from 'playwright';
 import { makeDataset } from '../tests/map-fixture.mjs';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const fixture = fileURLToPath(new URL('../tests/fixtures/synthetic-map.json', import.meta.url));
-const server = spawn('./run', ['map', '--dataset', fixture, '--port', '0', '--no-open'], { cwd: root });
+await fs.mkdir(path.join(root, 'work'), { recursive: true });
+const scratch = await fs.mkdtemp(path.join(root, 'work/map-view-'));
+const datasetPath = path.join(scratch, 'dataset.json');
+await fs.copyFile(fixture, datasetPath);
+const server = spawn('./run', ['map', '--dataset', datasetPath, '--port', '0', '--no-open'], { cwd: root });
 let browser, url;
 try {
   url = await new Promise((resolve, reject) => {
@@ -46,7 +51,7 @@ try {
   assert.equal(await page.locator('.leaflet-map-pane').getAttribute('style'), viewBeforeTheme);
   await page.reload(); await page.waitForFunction(() => document.querySelector('#visible-stat').textContent.includes('12 次'));
   assert.equal(await page.locator('html').getAttribute('data-theme'), 'light');
-  await page.locator('#file').setInputFiles(fixture); await page.waitForFunction(() => document.querySelector('#visible-stat').textContent.includes('12 次'));
+  await fs.copyFile(fixture, datasetPath); await page.reload(); await page.waitForFunction(() => document.querySelector('#visible-stat').textContent.includes('12 次'));
   assert.equal(await page.locator('html').getAttribute('data-theme'), 'light');
   await page.locator('#theme-toggle').click();
   await page.locator('#map').evaluate(element => { window.originalMapElement = element; });
@@ -63,9 +68,9 @@ try {
   await page.locator('#edit-place').click(); await page.locator('#place-label').fill('合成终点 A'); await page.locator('#label-form button[type=submit]').click();
   assert.equal(await page.locator('.place-name').first().textContent(), '合成终点 A');
   await page.reload(); await page.waitForFunction(() => document.querySelector('.place-name')?.textContent === '合成终点 A');
-  await page.locator('#file').setInputFiles({ name: 'broken.json', mimeType: 'application/json', buffer: Buffer.from('{broken') });
-  await page.waitForFunction(() => !document.querySelector('#error').hidden);
-  assert.match(await page.locator('#error').textContent(), /保留上一份/);
+  await fs.writeFile(datasetPath, '{broken');
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  assert.equal(await page.locator('input[type=file], #import-button').count(), 0);
   assert.match(await page.locator('#visible-stat').textContent(), /12 次/);
   await page.locator('#map-options > summary').click();
   await page.locator('#show-grid').check();
@@ -90,18 +95,30 @@ try {
   const single = makeDataset([{ id: 'line', xy: [[0, 0], [500, 0], [900, 300]] }]);
   const repeated = makeDataset(Array.from({ length: 6 }, (_, index) => ({ id: `line-${index}`, xy: [[0, 0], [500, 0], [900, 300]] })));
   async function renderEnergy(data, count, online = false) {
-    await page.locator('#file').setInputFiles({ name: 'synthetic.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(data)) });
+    await fs.writeFile(datasetPath, JSON.stringify(data)); await page.reload();
     await page.waitForFunction(count => document.querySelector('#visible-stat').textContent.includes(`${count} 次`), count);
     if (online) {
+      await page.locator('#map-options > summary').click();
       await page.waitForFunction(() => !document.querySelector('#basemap').disabled);
       await page.locator('#basemap').check();
     }
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-    return page.locator('.route-canvas').evaluate(canvas => { const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data; let energy = 0; for (let i = 0; i < pixels.length; i += 4) energy += (pixels[i] + pixels[i + 1] + pixels[i + 2]) * pixels[i + 3] / 255; return energy; });
+    return page.locator('.route-canvas').evaluate(canvas => {
+      const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+      let energy = 0, darkestCore = Infinity;
+      for (let i = 0; i < pixels.length; i += 4) {
+        energy += (pixels[i] + pixels[i + 1] + pixels[i + 2]) * pixels[i + 3] / 255;
+        if (pixels[i + 3] > 250 && pixels[i + 1] > pixels[i] + 10 && pixels[i + 2] > pixels[i] + 10) {
+          const channels = [pixels[i], pixels[i + 1], pixels[i + 2]].map(value => { value /= 255; return value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4; });
+          darkestCore = Math.min(darkestCore, channels[0] * .2126 + channels[1] * .7152 + channels[2] * .0722);
+        }
+      }
+      return { energy, darkestCore };
+    });
   }
-  const one = await renderEnergy(single, 1), six = await renderEnergy(repeated, 6);
+  const one = (await renderEnergy(single, 1)).energy, six = (await renderEnergy(repeated, 6)).energy;
   assert.ok(six > one * 1.15, `Repeated independent routes must brighten. One=${one}, six=${six}`);
-  await page.locator('#file').setInputFiles(fixture); await page.waitForFunction(() => document.querySelector('#visible-stat').textContent.includes('12 次'));
+  await fs.copyFile(fixture, datasetPath); await page.reload(); await page.waitForFunction(() => document.querySelector('#visible-stat').textContent.includes('12 次'));
   const contrast = await page.evaluate(() => {
     const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1; const ctx = canvas.getContext('2d');
     const color = token => { ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue(token); ctx.fillRect(0, 0, 1, 1); return Array.from(ctx.getImageData(0, 0, 1, 1).data).slice(0, 3).map(v => { v /= 255; return v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4; }); };
@@ -170,8 +187,8 @@ try {
   await page.locator('#basemap').uncheck();
   await page.locator('#theme-toggle').click();
   const lightOne = await renderEnergy(single, 1, true), lightSix = await renderEnergy(repeated, 6, true);
-  assert.ok(lightSix < lightOne, `Light basemap repeats must deepen in color. One=${lightOne}, six=${lightSix}`);
-  await page.locator('#file').setInputFiles(fixture);
+  assert.ok(Number.isFinite(lightOne.darkestCore) && lightSix.darkestCore < lightOne.darkestCore, `Light route cores must deepen. One=${JSON.stringify(lightOne)}, six=${JSON.stringify(lightSix)}`);
+  await fs.copyFile(fixture, datasetPath); await page.reload();
   await page.waitForFunction(() => document.querySelector('#visible-stat').textContent.includes('12 次'));
   if (await page.locator('#map-options').getAttribute('open') !== null) await page.locator('#map-options > summary').click();
   await page.getByRole('button',{name:'Zoom in',exact:true}).click();
@@ -326,7 +343,7 @@ try {
   assert.equal(await blockedPage.locator('#label-note').isVisible(), true);
   assert.match(await blockedPage.locator('#label-note').textContent(), /无法保存.*仅本次/);
   await blocked.close();
-  console.log(JSON.stringify({ passed: true, checks: ['default-dark', 'theme-persistence-import', 'theme-preserves-view-and-unsaved-label', 'blocked-storage-toggle', 'short-settings-disclosure', 'both-theme-contrast', 'desktop', 'mobile', 'mobile-chinese-hash-title-390-320', 'mobile-date-popover-bounds-390-320', 'counts', 'filter', 'labels-persist', 'malformed-preserves', 'area-hover', 'raw-coordinates-basemap-toggle', 'visible-base-and-repeat-contrast', 'contrast', 'no-external-network', 'no-page-errors', 'online-layer-cleanup', 'two-layer-switches-only', 'quiet-label-scale', 'tiny-svg-markers', 'marker-opens-panel', 'fractional-tile-rendering-dpr1-dpr2', 'light-repeat-deepening', 'keyboard-marker-selection', 'delayed-tile-continuity', 'stable-place-reselection', 'drawer-draft-and-focus', 'route-contrast-two-themes-multiple-zooms'], contrast, overlapBrightnessRatio: +(six / one).toFixed(2) }, null, 2));
+  console.log(JSON.stringify({ passed: true, checks: ['default-dark', 'theme-persistence-reload', 'theme-preserves-view-and-unsaved-label', 'blocked-storage-toggle', 'short-settings-disclosure', 'both-theme-contrast', 'desktop', 'mobile', 'mobile-chinese-hash-title-390-320', 'mobile-date-popover-bounds-390-320', 'counts', 'filter', 'labels-persist', 'invalid-source-preserves', 'area-hover', 'raw-coordinates-basemap-toggle', 'visible-base-and-repeat-contrast', 'contrast', 'no-external-network', 'no-page-errors', 'online-layer-cleanup', 'two-layer-switches-only', 'quiet-label-scale', 'tiny-svg-markers', 'marker-opens-panel', 'fractional-tile-rendering-dpr1-dpr2', 'light-repeat-deepening', 'keyboard-marker-selection', 'delayed-tile-continuity', 'stable-place-reselection', 'drawer-draft-and-focus', 'route-contrast-two-themes-multiple-zooms'], contrast, overlapBrightnessRatio: +(six / one).toFixed(2) }, null, 2));
 } finally {
   try { await browser?.close(); } finally {
     if (server.exitCode === null && server.signalCode === null) await new Promise(resolve => {
@@ -343,5 +360,6 @@ try {
       });
       assert.equal(socketClosed, true, 'Owned map socket must close after cleanup');
     }
+    await fs.rm(scratch, { recursive: true, force: true });
   }
 }

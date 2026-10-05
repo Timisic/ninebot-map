@@ -1,18 +1,17 @@
-# Import and date filtering
+# Endpoint loading and date filtering
 
-A user opens a local map, imports a Ride Dataset v1 file and filters map rides without changing all-history totals.
+A user opens a local map, loads the configured dataset endpoint and filters map rides without changing all-history totals.
 
 ## Sub-features
 
-- `import-page` opens an empty import page.
-- `import-file` loads a user-selected standard dataset.
+- `read-only-page` has no file picker, drop importer or upload endpoint.
 - `launch-dataset` opens a dataset supplied on the CLI.
 - `date-range` filters the visible routes inclusively.
-- `invalid-import` retains the previous valid map.
+- `invalid-replacement` retains the previous valid map.
 
 ## How to get to it (user POV)
 
-- Run `./run map`, then choose Import or drop a file.
+- Run `./run map` after collecting or downloading local data.
 - Run `./run map --dataset tests/fixtures/synthetic-map.json --port 0 --no-open`.
 - Expand the date panel, set dates, or choose all dates.
 
@@ -23,7 +22,7 @@ Preconditions:
 - `npm run verify:doctor` succeeds.
 - Use only `tests/fixtures/synthetic-map.json` and generated synthetic datasets.
 
-Run `npm run verify -- --suite map`. Its harness starts the normal CLI, imports through `#file`, sets `#from`, reads `#visible-stat` and `#history-stat`, clears the range, then imports malformed JSON. Require twelve fixture rides initially, three visible rides after the fixture filter, unchanged twelve history rides, and retention of the prior map after invalid import.
+Run `npm run verify -- --suite map`. Its harness starts the normal CLI, loads its owned source file, sets `#from`, reads `#visible-stat` and `#history-stat`, clears the range, then replaces the owned source with malformed JSON. Require twelve fixture rides initially, three visible rides after the fixture filter, unchanged twelve history rides, and retention of the prior map after invalid replacement.
 
 Read the map suite log. UI evidence can be requested through the wrapper's output directory.
 

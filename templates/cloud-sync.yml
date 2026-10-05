@@ -1,7 +1,7 @@
 name: Private ride sync
 on:
   schedule:
-    - cron: '17 * * * *'
+    - cron: '17 2 * * *'
   workflow_dispatch:
     inputs:
       force:
@@ -49,11 +49,12 @@ jobs:
       - run: uv sync --frozen
       - name: Verify the collector and privacy boundaries with synthetic data
         run: .venv/bin/python -m unittest discover -s tests -q
-      - name: Acquire rides, persist encrypted state, publish only the PNG
+      - name: Acquire rides, persist encrypted state, and publish approved map outputs
         env:
           NINEBOT_SESSION: ${{ secrets.NINEBOT_SESSION }}
           CLOUD_STATE_KEY: ${{ secrets.CLOUD_STATE_KEY }}
           PUBLIC_DEPLOY_KEY_1: ${{ secrets.PUBLIC_DEPLOY_KEY_1 }}
           PUBLIC_DEPLOY_KEY_2: ${{ secrets.PUBLIC_DEPLOY_KEY_2 }}
+          MAP_DEPLOY_KEY: ${{ secrets.MAP_DEPLOY_KEY }}
           SYNC_FORCE: ${{ inputs.force }}
         run: .venv/bin/python -m nbmap.cloud worker
