@@ -53,7 +53,7 @@ def create_server(root, port=8766, dataset_path=None):
             self.send_header('ETag', etag)
             self.send_header('Cache-Control', 'no-cache')
             self.send_header('X-Content-Type-Options', 'nosniff')
-            self.send_header('Referrer-Policy', 'no-referrer')
+            self.send_header('Referrer-Policy', 'strict-origin-when-cross-origin')
             self.send_header('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://tile.openstreetmap.org; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'")
             self.end_headers()
             if self.command != 'HEAD':

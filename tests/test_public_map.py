@@ -121,6 +121,7 @@ class PublicMapTests(unittest.TestCase):
                     return result
                 self.assertEqual(server.server_address[0], '127.0.0.1')
                 self.assertEqual(request('/')[0], 200)
+                self.assertEqual(request('/')[1]['Referrer-Policy'], 'strict-origin-when-cross-origin')
                 self.assertEqual(request('/index.html')[0], 200)
                 self.assertEqual(request('/dataset.json')[1]['ETag'], request('/dataset.json', 'HEAD')[1]['ETag'])
                 for path in ['/upload', '/import', '/.private/tokens.json', '/dataset.lock', '/data/', '/scripts/']:
