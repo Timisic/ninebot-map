@@ -29,7 +29,7 @@ The refresh harness also performs a read-only HTTP doctor on its owned instance 
 - `npm run verify -- --suite python` covers collector, local server, scheduler and cloud behavior with synthetic adapters.
 - `npm run verify -- --suite model` covers route, grid and destination calculations.
 
-Use existing selectors and actions in the harnesses. The refresh recipe fills `#from` and `#to`, chooses `#crs`, saves a name through `#label-form`, replaces its synthetic source file, and brings the page to the foreground. It reads `#history-stat`, `#visible-stat`, the controls and the saved name afterward.
+Use existing selectors and actions in the harnesses. The refresh recipe fills `#from` and `#to`, toggles `#show-grid`, saves a name through `#label-form`, replaces its synthetic source file, and brings the page to the foreground. It reads `#history-stat`, `#visible-stat`, the controls and the saved name afterward.
 
 ## Evidence
 

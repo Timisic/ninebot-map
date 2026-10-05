@@ -1,3 +1,15 @@
+export function createBasemap(url, options) {
+  const RetainedTiles = L.TileLayer.extend({
+    getEvents() {
+      const events = L.TileLayer.prototype.getEvents.call(this);
+      // Leaflet setView resets every frame; native tile pruning retains loaded fallback levels.
+      delete events.viewprereset;
+      return events;
+    }
+  });
+  return new RetainedTiles(url, options);
+}
+
 export function createRouteLayer(map) {
   const Layer = L.Layer.extend({
     onAdd() {
@@ -5,10 +17,12 @@ export function createRouteLayer(map) {
       this.canvas.setAttribute('aria-hidden', 'true');
       map.getPanes().overlayPane.appendChild(this.canvas);
       this.schedule = () => { if (!this.frame) this.frame = requestAnimationFrame(() => { this.frame = null; this.draw(); }); };
-      map.on('move zoom resize', this.schedule);
+      this.zoom = () => { cancelAnimationFrame(this.frame); this.frame = null; this.draw(); };
+      map.on('move resize', this.schedule);
+      map.on('zoom', this.zoom);
       this.schedule();
     },
-    onRemove() { map.off('move zoom resize', this.schedule); cancelAnimationFrame(this.frame); this.canvas.remove(); },
+    onRemove() { map.off('move resize', this.schedule); map.off('zoom', this.zoom); cancelAnimationFrame(this.frame); this.canvas.remove(); },
     setView(model, view, grid, selectedIds, lightSurface = false) { this.model = model; this.view = view; this.grid = grid; this.selectedIds = selectedIds; this.lightSurface = lightSurface; this.schedule(); },
     draw() {
       const size = map.getSize(), ratio = Math.min(devicePixelRatio || 1, 2);
@@ -29,26 +43,22 @@ export function createRouteLayer(map) {
         }
       }
       ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-      if (this.lightSurface) {
-        for (const track of this.view.tracks) for (const path of track.paths) {
-          const points = path.map(point => map.latLngToContainerPoint(point));
-          ctx.strokeStyle = `rgba(8,42,46,${!this.selectedIds || this.selectedIds.has(track.id) ? .75 : .15})`; ctx.fillStyle = ctx.strokeStyle; ctx.lineWidth = 4;
-          ctx.beginPath(); points.forEach((p, index) => index ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
-          if (points.length === 1) { ctx.arc(points[0].x, points[0].y, 2, 0, Math.PI * 2); ctx.fill(); } else ctx.stroke();
-        }
+      const paths = this.view.tracks.flatMap(track => track.paths.map(path => ({
+        points: path.map(point => map.latLngToContainerPoint(point)),
+        selected: !this.selectedIds || this.selectedIds.has(track.id)
+      })));
+      const width = Math.max(1.8, Math.min(2.8, 2.2 + (map.getZoom() - 13) * .12));
+      function stroke(points, color, lineWidth, alpha) {
+        ctx.globalAlpha = alpha; ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = lineWidth;
+        ctx.beginPath(); points.forEach((point, index) => index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y));
+        if (points.length === 1) { ctx.arc(points[0].x, points[0].y, lineWidth / 2, 0, Math.PI * 2); ctx.fill(); }
+        else ctx.stroke();
       }
-      ctx.globalCompositeOperation = 'lighter';
-      for (const track of this.view.tracks) {
-        const selected = !this.selectedIds || this.selectedIds.has(track.id);
-        for (const path of track.paths) {
-          const points = path.map(point => map.latLngToContainerPoint(point));
-          for (const [width, opacity] of [[7, .055], [2.2, .29]]) {
-            ctx.strokeStyle = `rgba(43,188,198,${opacity * (selected ? 1 : .18)})`; ctx.fillStyle = ctx.strokeStyle; ctx.lineWidth = width;
-            ctx.beginPath(); points.forEach((p, index) => index ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
-            if (points.length === 1) { ctx.arc(points[0].x, points[0].y, width / 2, 0, Math.PI * 2); ctx.fill(); } else ctx.stroke();
-          }
-        }
-      }
+      for (const { points, selected } of paths) stroke(points, this.lightSurface ? '#ffffff' : '#0e2429', width + 1.8, selected ? .9 : .25);
+      for (const { points, selected } of paths) stroke(points, this.lightSurface ? '#167e87' : '#36b9bf', width, selected ? 1 : .3);
+      ctx.globalCompositeOperation = this.lightSurface ? 'source-over' : 'lighter';
+      for (const { points, selected } of paths) stroke(points, this.lightSurface ? '#053d48' : '#53b9bb', width, selected ? .16 : .025);
+      ctx.globalAlpha = 1;
       ctx.globalCompositeOperation = 'source-over';
     }
   });

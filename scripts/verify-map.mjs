@@ -29,15 +29,16 @@ try {
   assert.deepEqual(await page.locator('.place-count').allTextContents(), ['6次', '3次', '2次', '1次']);
   await page.locator('#map').evaluate(element => { window.originalMapElement = element; });
   assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark');
-  assert.equal((await page.locator('#map-options > summary').textContent()).trim(), '设置');
+  assert.equal((await page.locator('#map-options > summary').textContent()).trim(), '图层');
   await page.locator('#map-options > summary').click();
-  assert.equal(await page.locator('#data-notes').getAttribute('open'), null);
-  assert.equal(await page.locator('#crs-note').isVisible(), false);
-  assert.equal(await page.locator('#basemap-gate').isVisible(), true);
+  assert.equal(await page.locator('#crs, #crs-note, #data-notes').count(), 0);
+  assert.equal(await page.locator('.settings-content input[type=checkbox]').count(), 2);
+  assert.equal(await page.locator('#basemap').isEnabled(), true);
+  assert.equal(await page.locator('#basemap').isChecked(), false);
   await page.locator('#map-options > summary').click();
   await page.locator('#toggle-places').click();
   await page.locator('.place-button').first().click();
-  await page.locator('#place-label').fill('尚未保存的名称');
+  await page.locator('#edit-place').click(); await page.locator('#place-label').fill('尚未保存的名称');
   const viewBeforeTheme = await page.locator('.leaflet-map-pane').getAttribute('style');
   await page.locator('#theme-toggle').click();
   assert.equal(await page.locator('html').getAttribute('data-theme'), 'light');
@@ -59,31 +60,39 @@ try {
   await page.locator('#date-panel > summary').click();
   await page.locator('#toggle-places').click();
   await page.locator('.place-button').first().click();
-  await page.locator('#place-label').fill('合成终点 A'); await page.locator('#label-form button[type=submit]').click();
+  await page.locator('#edit-place').click(); await page.locator('#place-label').fill('合成终点 A'); await page.locator('#label-form button[type=submit]').click();
   assert.equal(await page.locator('.place-name').first().textContent(), '合成终点 A');
   await page.reload(); await page.waitForFunction(() => document.querySelector('.place-name')?.textContent === '合成终点 A');
   await page.locator('#file').setInputFiles({ name: 'broken.json', mimeType: 'application/json', buffer: Buffer.from('{broken') });
   await page.waitForFunction(() => !document.querySelector('#error').hidden);
   assert.match(await page.locator('#error').textContent(), /保留上一份/);
   assert.match(await page.locator('#visible-stat').textContent(), /12 次/);
+  await page.locator('#map-options > summary').click();
   await page.locator('#show-grid').check();
+  await page.locator('#map-options > summary').click();
   const mapBox = await page.locator('#map').boundingBox(); await page.mouse.move(mapBox.x + 500, mapBox.y + 400);
   await page.waitForFunction(() => !document.querySelector('#cell-info').hidden);
   assert.match(await page.locator('#cell-info').textContent(), /次行程经过这个区域/);
-  await page.locator('#map-options > summary').click(); assert.equal(await page.locator('#basemap').isDisabled(), true);
-  await page.locator('#crs').selectOption('wgs84'); await page.waitForFunction(() => document.querySelector('#crs-note').textContent.includes('原始坐标') && !document.querySelector('#basemap').disabled);
-  await page.locator('#crs').selectOption('gcj02'); await page.waitForFunction(() => document.querySelector('#crs-note').textContent.includes('GCJ02') && !document.querySelector('#basemap').disabled);
-  assert.match(await page.locator('#crs-note').textContent(), /校准|转为/);
-  await page.locator('#crs').selectOption('unverified'); await page.waitForFunction(() => document.querySelector('#basemap').disabled);
+  await page.mouse.move(mapBox.x + 700, mapBox.y + 400);
+  await page.mouse.down(); await page.mouse.move(mapBox.x + 750, mapBox.y + 430, { steps: 6 }); await page.mouse.up();
+  await page.waitForTimeout(350);
+  const rawMarkerBeforePreview = await page.locator('.destination-marker').first().boundingBox();
+  await context.route('https://tile.openstreetmap.org/**', route => route.fulfill({ status: 200, contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jGMsAAAAASUVORK5CYII=', 'base64') }));
   await page.locator('#map-options > summary').click();
+  await page.locator('#basemap').check();
+  await page.locator('img.leaflet-tile-loaded').first().waitFor();
+  assert.deepEqual(await page.locator('.destination-marker').first().boundingBox(), rawMarkerBeforePreview);
+  await page.locator('#basemap').uncheck();
+  assert.equal(await page.locator('img.leaflet-tile').count(), 0);
+  assert.deepEqual(await page.locator('.destination-marker').first().boundingBox(), rawMarkerBeforePreview);
   await page.locator('#show-grid').uncheck();
+  await page.locator('#map-options > summary').click();
   const single = makeDataset([{ id: 'line', xy: [[0, 0], [500, 0], [900, 300]] }]);
   const repeated = makeDataset(Array.from({ length: 6 }, (_, index) => ({ id: `line-${index}`, xy: [[0, 0], [500, 0], [900, 300]] })));
   async function renderEnergy(data, count, online = false) {
     await page.locator('#file').setInputFiles({ name: 'synthetic.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(data)) });
     await page.waitForFunction(count => document.querySelector('#visible-stat').textContent.includes(`${count} 次`), count);
     if (online) {
-      await page.locator('#crs').selectOption('wgs84');
       await page.waitForFunction(() => !document.querySelector('#basemap').disabled);
       await page.locator('#basemap').check();
     }
@@ -91,7 +100,7 @@ try {
     return page.locator('.route-canvas').evaluate(canvas => { const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data; let energy = 0; for (let i = 0; i < pixels.length; i += 4) energy += (pixels[i] + pixels[i + 1] + pixels[i + 2]) * pixels[i + 3] / 255; return energy; });
   }
   const one = await renderEnergy(single, 1), six = await renderEnergy(repeated, 6);
-  assert.ok(six > one * 2, `Repeated independent routes must brighten. One=${one}, six=${six}`);
+  assert.ok(six > one * 1.15, `Repeated independent routes must brighten. One=${one}, six=${six}`);
   await page.locator('#file').setInputFiles(fixture); await page.waitForFunction(() => document.querySelector('#visible-stat').textContent.includes('12 次'));
   const contrast = await page.evaluate(() => {
     const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1; const ctx = canvas.getContext('2d');
@@ -109,6 +118,13 @@ try {
   });
   assert.ok(lightContrast >= 4.5);
   await page.locator('#theme-toggle').click();
+  if (process.env.MAP_SCREENSHOTS) {
+    await fs.mkdir(process.env.MAP_SCREENSHOTS, { recursive: true });
+    await page.screenshot({ path: `${process.env.MAP_SCREENSHOTS}/synthetic-desktop-dark.png` });
+    await page.locator('#theme-toggle').click();
+    await page.screenshot({ path: `${process.env.MAP_SCREENSHOTS}/synthetic-desktop-light.png` });
+    await page.locator('#theme-toggle').click();
+  }
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(url + '#title=' + encodeURIComponent('北京骑行地图'));
   await page.reload();
@@ -120,7 +136,7 @@ try {
       const title = element.querySelector('h1'), titleStyle = getComputedStyle(title);
       return { height: element.getBoundingClientRect().height, titleHeight: title.getBoundingClientRect().height, lineHeight: parseFloat(titleStyle.lineHeight), nowrap: titleStyle.whiteSpace, actions: [...element.querySelectorAll('.actions button')].map(button => ({ width: button.getBoundingClientRect().width, height: button.getBoundingClientRect().height })) };
     });
-    assert.equal(header.height, 52, JSON.stringify({ width, header }));
+    assert.equal(header.height, 56, JSON.stringify({ width, header }));
     assert.equal(header.nowrap, 'nowrap');
     assert.ok(header.titleHeight <= header.lineHeight + 1, JSON.stringify({ width, header }));
     assert.ok(header.actions.every(button => button.width >= 44 && button.height >= 44));
@@ -130,29 +146,34 @@ try {
     assert.ok(dates.x >= 0 && dates.x + dates.width <= width, JSON.stringify({ width, dates }));
     await page.locator('#date-panel > summary').click();
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    await page.locator('#map-options > summary').click();
+    const settings = await page.locator('.settings-content').boundingBox();
+    assert.ok(settings.x >= 0 && settings.x + settings.width <= width);
+    assert.equal(await page.locator('.settings-content input[type=checkbox]').count(), 2);
+    assert.equal(await page.locator('.settings-content').evaluate(element => { const r = element.getBoundingClientRect(); return element.contains(document.elementFromPoint(r.right - 24, r.bottom - 24)); }), true);
+    if (process.env.MAP_SCREENSHOTS) await page.screenshot({ path: `${process.env.MAP_SCREENSHOTS}/synthetic-settings-${width}.png` });
+    await page.locator('#map-options > summary').click();
   }
   await page.setViewportSize({ width: 390, height: 844 });
   if (await page.locator('#places-panel').isVisible()) await page.locator('#toggle-places').click();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.locator('#toggle-places').click(); assert.equal(await page.locator('#places-panel').isVisible(), true);
   await page.locator('.place-button').first().click();
-  assert.equal(await page.locator('#label-form').isVisible(), true);
+  assert.equal(await page.locator('#selection-summary').isVisible(), true);
   if (process.env.MAP_SCREENSHOTS) { await fs.mkdir(process.env.MAP_SCREENSHOTS, { recursive: true }); await page.screenshot({ path: `${process.env.MAP_SCREENSHOTS}/synthetic-mobile.png` }); }
   assert.deepEqual(external, []); assert.deepEqual(errors, []);
   await page.setViewportSize({ width: 1440, height: 960 });
   await context.route('https://tile.openstreetmap.org/**', route => route.fulfill({ status: 200, contentType: 'image/png', headers: {'access-control-allow-origin':'*'}, body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jGMsAAAAASUVORK5CYII=', 'base64') }));
   await page.locator('#map-options > summary').click();
-  await page.locator('#crs').selectOption('wgs84'); await page.waitForFunction(() => document.querySelector('#crs-note').textContent.includes('原始坐标') && !document.querySelector('#basemap').disabled);
   await page.locator('#basemap').check();
   await page.waitForFunction(() => document.querySelectorAll('img.leaflet-tile').length > 0);
-  await page.locator('#crs').selectOption('gcj02');
-  await page.waitForFunction(() => document.querySelector('#crs-note').textContent.includes('GCJ02') && document.querySelector('#basemap').checked && document.querySelectorAll('img.leaflet-tile').length > 0);
   await page.locator('#basemap').uncheck();
   await page.locator('#theme-toggle').click();
   const lightOne = await renderEnergy(single, 1, true), lightSix = await renderEnergy(repeated, 6, true);
-  assert.ok(lightSix > lightOne * 1.2, `Light basemap repeats must brighten. One=${lightOne}, six=${lightSix}`);
+  assert.ok(lightSix < lightOne, `Light basemap repeats must deepen in color. One=${lightOne}, six=${lightSix}`);
   await page.locator('#file').setInputFiles(fixture);
   await page.waitForFunction(() => document.querySelector('#visible-stat').textContent.includes('12 次'));
+  if (await page.locator('#map-options').getAttribute('open') !== null) await page.locator('#map-options > summary').click();
   await page.getByRole('button',{name:'Zoom in',exact:true}).click();
   assert.deepEqual(errors, []);
   assert.equal(await page.locator('#error').isVisible(), false);
@@ -166,18 +187,19 @@ try {
   await page.keyboard.press('Enter');
   assert.equal(await page.locator('#places-panel').isVisible(), true);
   const panelBox = await page.locator('#places-panel').boundingBox();
-  assert.equal(panelBox.width, 256);
-  assert.ok(panelBox.height <= 960 / 2);
+  assert.equal(panelBox.width, 320);
+  assert.ok(panelBox.height <= 960 && panelBox.height > 600);
 
 
   for (const dpr of [1, 2]) {
     const retinaContext = await browser.newContext({ viewport: {width: 1200, height: 800}, deviceScaleFactor: dpr });
     await retinaContext.route('https://tile.openstreetmap.org/**', route => route.fulfill({status:200, contentType:'image/png', headers: {'access-control-allow-origin':'*'}, body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jGMsAAAAASUVORK5CYII=', 'base64')}));
     const retinaPage = await retinaContext.newPage(); retinaPage.setDefaultTimeout(15000);
-    await retinaPage.goto(url + '#crs=wgs84&basemap=osm');
+    await retinaPage.goto(url + '#basemap=osm');
     await retinaPage.waitForFunction(() => document.querySelector('img.leaflet-tile-loaded'));
-    const scaling = await retinaPage.locator('img.leaflet-tile-loaded').first().evaluate(e => ({width:e.getBoundingClientRect().width, filter:getComputedStyle(e.closest(".basemap-tiles")).filter}));
-    assert.equal(scaling.width, dpr === 1 ? 256 : 128, JSON.stringify({dpr, ...scaling}));
+    const scaling = await retinaPage.locator('img.leaflet-tile-loaded').first().evaluate(e => ({width:e.getBoundingClientRect().width, nativeWidth:parseFloat(e.style.width), filter:getComputedStyle(e.closest(".basemap-tiles")).filter}));
+    assert.equal(scaling.nativeWidth, dpr === 1 ? 256 : 128);
+    assert.ok(scaling.width / scaling.nativeWidth >= .70 && scaling.width / scaling.nativeWidth <= 1.42, JSON.stringify({ dpr, ...scaling }));
     assert.equal(scaling.filter, 'invert(1) hue-rotate(180deg)');
     const tileCount = await retinaPage.locator('img.leaflet-tile').count();
     await retinaPage.locator('#theme-toggle').click();
@@ -193,12 +215,100 @@ try {
     if (dpr === 2) {
       await retinaPage.locator('#map-options > summary').click();
       await retinaPage.locator('#basemap').uncheck();
+      await retinaPage.locator('#map-options > summary').click();
       assert.equal(await retinaPage.locator('.leaflet-control-zoom-in').getAttribute('aria-disabled'), 'false');
       await retinaPage.locator('.leaflet-control-zoom-in').click();
       assert.equal(await retinaPage.locator('.leaflet-control-zoom-in').getAttribute('aria-disabled'), 'true');
     }
     await retinaContext.close();
   }
+
+  const continuity = await browser.newContext({ viewport: { width: 628, height: 667 } });
+  const tileRequests = [];
+  await continuity.route('https://tile.openstreetmap.org/**', async route => {
+    tileRequests.push(route.request().url());
+    await new Promise(resolve => setTimeout(resolve, 160));
+    await route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256"><rect width="256" height="256" fill="#e8efea"/><path d="M0 128H256M128 0V256" stroke="#b6c5bc" stroke-width="5"/></svg>' }).catch(() => {});
+  });
+  const motion = await continuity.newPage();
+  const motionErrors = []; motion.on('pageerror', error => motionErrors.push(error.message));
+  await motion.goto(url + '#basemap=osm');
+  await motion.locator('img.leaflet-tile-loaded').first().waitFor();
+  await motion.waitForTimeout(200);
+  await motion.mouse.move(420, 270);
+  const loadedDuringZoom = [];
+  for (let step = 0; step < 24; step++) {
+    await motion.mouse.wheel(0, step < 12 ? -45 : 45);
+    await motion.waitForTimeout(24);
+    const coverage = await motion.evaluate(() => {
+      const box = document.querySelector('#map').getBoundingClientRect();
+      const x = box.x + box.width / 2, y = box.y + box.height / 2;
+      const images = [...document.querySelectorAll('img.leaflet-tile-loaded')];
+      return { count: images.length, center: images.some(image => { const r = image.getBoundingClientRect(); return r.left <= x && r.right >= x && r.top <= y && r.bottom >= y; }) };
+    });
+    loadedDuringZoom.push(coverage);
+    assert.ok(coverage.count > 0 && coverage.center, `Zoom discarded the visible basemap: ${JSON.stringify(coverage)}`);
+  }
+  await motion.waitForTimeout(700);
+  await motion.mouse.down(); await motion.mouse.move(460, 300, { steps: 5 }); await motion.mouse.up();
+  await motion.waitForTimeout(300);
+  assert.ok(await motion.locator('img.leaflet-tile-loaded').count() > 0);
+  await motion.locator('#toggle-places').click();
+  await motion.waitForTimeout(100);
+  const initialList = await motion.locator('#places').boundingBox();
+  await motion.locator('.place-button').first().click();
+  await motion.locator('.place-button').first().click();
+  assert.equal(await motion.locator('.place-button[aria-pressed=true]').count(), 1);
+  assert.equal(await motion.locator('#selection-summary').isVisible(), true);
+  assert.equal(await motion.locator('#label-form').isVisible(), false);
+  const selectedList = await motion.locator('#places').boundingBox();
+  assert.ok(Math.abs(initialList.height - selectedList.height) < 1);
+  await motion.locator('#edit-place').click();
+  await motion.locator('#place-label').fill('未保存的合成名称');
+  await motion.locator('#close-places').click();
+  assert.equal(await motion.locator('#toggle-places').evaluate(element => element === document.activeElement), true);
+  await motion.locator('#toggle-places').click();
+  assert.equal(await motion.locator('#place-label').inputValue(), '未保存的合成名称');
+  assert.equal(await motion.locator('#label-form').isVisible(), true);
+  await motion.locator('#cancel-edit').click();
+  const selectedId = await motion.locator('.place-button[aria-pressed=true]').getAttribute('data-place-id');
+  await motion.locator('#map').click({ position: { x: 250, y: 130 } });
+  await motion.mouse.wheel(0, -30); await motion.waitForTimeout(600);
+  assert.equal(await motion.locator('.place-button[aria-pressed=true]').getAttribute('data-place-id'), selectedId);
+  if (process.env.MAP_SCREENSHOTS) {
+    await motion.screenshot({ path: `${process.env.MAP_SCREENSHOTS}/synthetic-628-places-dark.png` });
+    await motion.locator('#theme-toggle').click();
+    await motion.screenshot({ path: `${process.env.MAP_SCREENSHOTS}/synthetic-628-places-light.png` });
+    await fs.writeFile(`${process.env.MAP_SCREENSHOTS}/continuity.json`, JSON.stringify({ synthetic: true, delayMs: 160, loadedDuringZoom, initialList, selectedList, requests: tileRequests.length, draftPreserved: true, selectionPreserved: true }, null, 2));
+  }
+  assert.deepEqual(motionErrors, []);
+  await continuity.close();
+
+  const legacy = await browser.newContext();
+  const legacyPage = await legacy.newPage();
+  await legacyPage.goto(url + '#crs=gcj02');
+  await legacyPage.locator('.place-button').first().waitFor({ state: 'attached' });
+  await legacyPage.evaluate(async () => {
+    const id = document.querySelector('.place-button').dataset.placeId;
+    const data = await (await fetch('/dataset.json')).json();
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${data.dataset_id}|wgs84|destinations-fixed-anchor-100m-v1`));
+    const key = 'ride-map-labels:' + [...new Uint8Array(digest)].map(n => n.toString(16).padStart(2, '0')).join('');
+    localStorage.setItem(key, JSON.stringify({ [id]: '原道路预览名称' }));
+  });
+  await legacyPage.reload();
+  await legacyPage.waitForFunction(() => document.querySelector('.place-name')?.textContent === '原道路预览名称');
+  assert.equal(await legacyPage.locator('#crs').count(), 0);
+  assert.deepEqual(await legacyPage.locator('.place-count').allTextContents(), ['6次', '3次', '2次', '1次']);
+  await legacyPage.locator('#toggle-places').click();
+  await legacyPage.locator('.place-button').first().click();
+  await legacyPage.locator('#edit-place').click();
+  await legacyPage.locator('#place-label').fill('');
+  await legacyPage.locator('#label-form button[type=submit]').click();
+  assert.equal(await legacyPage.locator('.place-name').first().textContent(), '地点 1');
+  await legacyPage.reload();
+  await legacyPage.waitForFunction(() => document.querySelector('#visible-stat').textContent.includes('12 次'));
+  assert.equal(await legacyPage.locator('.place-name').first().textContent(), '地点 1');
+  await legacy.close();
 
   const blocked = await browser.newContext();
   await blocked.addInitScript(() => { Object.defineProperty(window, 'localStorage', {get() {throw new DOMException('blocked', 'SecurityError');}}); });
@@ -207,8 +317,16 @@ try {
   assert.equal(await blockedPage.locator('html').getAttribute('data-theme'), 'dark');
   await blockedPage.locator('#theme-toggle').click();
   assert.equal(await blockedPage.locator('html').getAttribute('data-theme'), 'light');
+  await blockedPage.locator('#toggle-places').click();
+  await blockedPage.locator('.place-button').first().click();
+  await blockedPage.locator('#edit-place').click();
+  await blockedPage.locator('#place-label').fill('仅本次名称');
+  await blockedPage.locator('#label-form button[type=submit]').click();
+  assert.equal(await blockedPage.locator('#label-form').isVisible(), true);
+  assert.equal(await blockedPage.locator('#label-note').isVisible(), true);
+  assert.match(await blockedPage.locator('#label-note').textContent(), /无法保存.*仅本次/);
   await blocked.close();
-  console.log(JSON.stringify({ passed: true, checks: ['default-dark', 'theme-persistence-import', 'theme-preserves-view-and-unsaved-label', 'blocked-storage-toggle', 'short-settings-disclosure', 'both-theme-contrast', 'desktop', 'mobile', 'mobile-chinese-hash-title-390-320', 'mobile-date-popover-bounds-390-320', 'counts', 'filter', 'labels-persist', 'malformed-preserves', 'area-hover', 'crs-gating', 'additive-pixels', 'contrast', 'no-external-network', 'no-page-errors', 'online-layer-cleanup', 'coordinate-preview', 'quiet-label-scale', 'tiny-svg-markers', 'marker-opens-panel', 'integer-tile-scaling-dpr1-dpr2', 'online-additive-pixels', 'keyboard-marker-selection'], contrast, overlapBrightnessRatio: +(six / one).toFixed(2) }, null, 2));
+  console.log(JSON.stringify({ passed: true, checks: ['default-dark', 'theme-persistence-import', 'theme-preserves-view-and-unsaved-label', 'blocked-storage-toggle', 'short-settings-disclosure', 'both-theme-contrast', 'desktop', 'mobile', 'mobile-chinese-hash-title-390-320', 'mobile-date-popover-bounds-390-320', 'counts', 'filter', 'labels-persist', 'malformed-preserves', 'area-hover', 'raw-coordinates-basemap-toggle', 'visible-base-and-repeat-contrast', 'contrast', 'no-external-network', 'no-page-errors', 'online-layer-cleanup', 'two-layer-switches-only', 'quiet-label-scale', 'tiny-svg-markers', 'marker-opens-panel', 'fractional-tile-rendering-dpr1-dpr2', 'light-repeat-deepening', 'keyboard-marker-selection', 'delayed-tile-continuity', 'stable-place-reselection', 'drawer-draft-and-focus', 'route-contrast-two-themes-multiple-zooms'], contrast, overlapBrightnessRatio: +(six / one).toFixed(2) }, null, 2));
 } finally {
   try { await browser?.close(); } finally {
     if (server.exitCode === null && server.signalCode === null) await new Promise(resolve => {

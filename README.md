@@ -28,7 +28,7 @@ cd ninebot-map
 ./run sync --from 202601 --to 202603    # 同步指定月份
 ./run prepare --all-map-tracks         # 生成全部已保存轨迹的地图数据
 ./run prepare --map-from 2026-01-01    # 或选择指定日期之后的轨迹
-./run map --latest                    # 打开最新本地地图
+./run map                             # 打开已选车辆或唯一车辆的本地地图
 ```
 
 地图支持路线叠加、日期筛选、经过区域次数和终点地点列表。后续同步沿用已保存的地图范围。
@@ -54,11 +54,15 @@ cd ninebot-map
 ## 导入本地数据
 
 ```bash
-./run map                              # 打开本地导入页
+./run map --empty                      # 打开空白导入页
 ./run map --dataset /path/to/dataset.json
 ./run map --dataset tests/fixtures/synthetic-map.json --no-open
 ```
 
-地图默认离线，可选择坐标系并开启在线道路底图。关闭终端服务按 Ctrl-C。会话存于 `.private/`，采集档案存于 `data/`，这两个目录由 Git 忽略。
+地图会自动打开浏览器，默认地址为 `http://127.0.0.1:8765/`。保留终端运行，按 Ctrl-C 关闭服务。没有可自动选择的数据时显示导入页。
+
+地图统一使用原始坐标。“图层”只保留道路底图和经过次数两个开关。默认无底图，开启道路底图后叠加道路预览。
+
+会话存于 `.private/`，采集档案存于 `data/`，两个目录均由 Git 忽略。曾在 macOS 安装本机定时同步时，程序可能将它们移到 `~/Library/Application Support/Ninebot Map/<标识>/`，并在项目里保留符号链接。终端显示这个路径属于本地保存，不是云端上传。仍可在项目根目录运行 `./run map`。详见[本地存储说明](docs/operations.md#本地存储与地图入口)。
 
 [项目文档](docs/README.md) · [地图说明](docs/map-viewer.md) · [MIT License](LICENSE)

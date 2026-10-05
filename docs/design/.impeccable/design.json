@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-10-04T09:25:27.375975+00:00",
+  "generatedAt": "2026-10-05T06:21:16.571370+00:00",
   "title": "骑行地图界面",
   "extensions": {
     "colorMeta": {
@@ -411,7 +411,7 @@
       "refersTo": "button-primary",
       "description": "空状态中的主要操作。",
       "html": "<button class=\"ds-import\">选择数据文件</button>",
-      "css": ".ds-import{font:14px/1.5 -apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;min-height:42px;padding:8px 14px;border:1px solid var(--primary,#75c8c3);border-radius:8px;background:var(--primary,#75c8c3);color:var(--on-primary,#142b2a);cursor:pointer}.ds-import:hover{background:var(--primary,#75c8c3);border-color:var(--primary,#75c8c3)}.ds-import:active{background:var(--primary,#75c8c3)}.ds-import:focus-visible{outline:2px solid var(--focus,#9fe4de);outline-offset:3px;}"
+      "css": ".ds-import{font:14px/1.5 -apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;min-height:44px;padding:8px 14px;border:1px solid var(--primary,#75c8c3);border-radius:8px;background:var(--primary,#75c8c3);color:var(--on-primary,#142b2a);cursor:pointer}.ds-import:hover{background:var(--primary,#75c8c3);border-color:var(--primary,#75c8c3)}.ds-import:active{background:var(--primary,#75c8c3)}.ds-import:focus-visible{outline:2px solid var(--focus,#9fe4de);outline-offset:3px;}"
     },
     {
       "name": "日期字段",
@@ -419,15 +419,15 @@
       "refersTo": "field",
       "description": "日期弹层中的字段。",
       "html": "<label class=\"ds-field-label\">开始日期<input class=\"ds-field\" type=\"date\"></label>",
-      "css": ".ds-field-label{font:14px/1.5 -apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;display:flex;flex-direction:column;gap:6px;color:var(--secondary,#b6c9c6)}.ds-field{font:14px/1.5 -apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;min-height:42px;padding:7px 10px;color:var(--ink,#edf5f2);background:var(--panel,#203235);border:1px solid var(--line,#4b6467);border-radius:8px}.ds-field:focus-visible{outline:2px solid var(--focus,#9fe4de);outline-offset:3px;}"
+      "css": ".ds-field-label{font:14px/1.5 -apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;display:flex;flex-direction:column;gap:6px;color:var(--secondary,#b6c9c6)}.ds-field{font:14px/1.5 -apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;min-height:44px;padding:7px 10px;color:var(--ink,#edf5f2);background:var(--panel,#203235);border:1px solid var(--line,#4b6467);border-radius:8px}.ds-field:focus-visible{outline:2px solid var(--focus,#9fe4de);outline-offset:3px;}"
     },
     {
       "name": "地点面板",
       "kind": "card",
       "refersTo": "place-panel",
-      "description": "按需打开的窄地点面板。",
+      "description": "桌面右侧停靠，小屏幕底部停靠，列表与详情分开。",
       "html": "<aside class=\"ds-panel\"><strong>常去地点</strong><p>选择地点查看相关路线。</p></aside>",
-      "css": ".ds-panel{font:14px/1.5 -apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;width:256px;background:var(--panel,#203235);color:var(--ink,#edf5f2);border:1px solid var(--line,#4b6467);border-radius:12px;overflow:hidden}.ds-panel strong{display:block;font-size:15px;font-weight:600;padding:12px 14px 8px}.ds-panel p{font-size:13px;padding:0 14px;color:var(--secondary,#b6c9c6)}"
+      "css": ".ds-panel{font:14px/1.5 -apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;width:320px;background:var(--panel,#203235);color:var(--ink,#edf5f2);border:1px solid var(--line,#4b6467);border-radius:12px;overflow:hidden}.ds-panel strong{display:block;font-size:15px;font-weight:600;padding:12px 14px 8px}.ds-panel p{font-size:13px;padding:0 14px;color:var(--secondary,#b6c9c6)}"
     },
     {
       "name": "选中地点",
@@ -435,7 +435,7 @@
       "refersTo": "place-selected",
       "description": "地点名称与结束次数同行显示。",
       "html": "<button class=\"ds-place\" aria-pressed=\"true\"><span>示例地点</span><span>次数</span></button>",
-      "css": ".ds-place{font:14px/1.5 -apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;display:flex;align-items:center;justify-content:space-between;width:256px;min-height:46px;padding:8px;border:0;border-radius:7px;background:var(--selected,#31534f);color:var(--ink,#edf5f2);box-shadow:inset 1px 0 var(--primary,#75c8c3);cursor:pointer}.ds-place:hover{background:var(--hover,#30484b)}.ds-place:active{background:var(--active,#3b575a)}.ds-place:focus-visible{outline:2px solid var(--focus,#9fe4de);outline-offset:3px;}"
+      "css": ".ds-place{font:14px/1.5 -apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif;display:flex;align-items:center;justify-content:space-between;width:320px;min-height:46px;padding:8px;border:0;border-radius:7px;background:var(--selected,#31534f);color:var(--ink,#edf5f2);box-shadow:inset 1px 0 var(--primary,#75c8c3);cursor:pointer}.ds-place:hover{background:var(--hover,#30484b)}.ds-place:active{background:var(--active,#3b575a)}.ds-place:focus-visible{outline:2px solid var(--focus,#9fe4de);outline-offset:3px;}"
     },
     {
       "name": "地图地点针",
@@ -447,17 +447,17 @@
     }
   ],
   "narrative": {
-    "northStar": "安静的地图边框",
-    "overview": "地图是主画面。52px 顶栏保留标题、主题切换、导入、全图和地点入口。全部历史与当前地图的统计分开显示，日期和设置按需展开。默认深色，浅色可手动切换，选择保存在此浏览器。",
+    "northStar": "地图与稳定的停靠面板",
+    "overview": "地图独立占据可视区域，地点面板停靠于右侧或底部。统计与日期在左上，图层与视角控件在右下。单次路线清晰，重复路线按主题增强。",
     "keyCharacteristics": [
-      "深浅色控件与地图背景同步。",
-      "小图标、紧凑统计与默认收起的地点列表。",
-      "筛选与地点选择保留同一个地图实例。"
+      "选择与命名分开，关闭面板保留草稿。",
+      "地图给面板留出空间。",
+      "本地数据、未知坐标声明和离线默认保持可见。"
     ],
     "rules": [
       {
-        "name": "The Theme Map Rule",
-        "body": "在线底图在浅色下保留 OpenStreetMap 原色，在深色下仅对瓦片使用本地 invert(1) hue-rotate(180deg)，不增加模糊或重采样滤镜。路线继续使用 Canvas lighter 混合增亮，浅色下增加深色衬线。",
+        "name": "Routes and basemap",
+        "body": "每条路线有可见底线。暗色重复路线变亮，浅色重复路线变深。连续缩放保留已加载瓦片。",
         "section": "colors"
       }
     ],

@@ -89,15 +89,14 @@ try {
   await page.locator('#to').dispatchEvent('change');
   await page.locator('#date-panel > summary').click();
   await page.locator('#map-options > summary').click();
-  await page.locator('#crs').selectOption('gcj02');
-  await page.waitForFunction(() => document.querySelector('#crs-note').textContent.includes('GCJ02'));
+  await page.locator('#show-grid').check();
   await page.locator('#map-options > summary').click();
   await page.locator('#toggle-places').click();
   await page.locator('.place-button').first().click();
-  await page.locator('#place-label').fill('Synthetic saved label');
+  await page.locator('#edit-place').click(); await page.locator('#place-label').fill('Synthetic saved label');
   await page.locator('#label-form button[type=submit]').click();
   const view = await page.locator('.leaflet-map-pane').getAttribute('style');
-  await record('Set date range, CRS, saved label and preserve view', { from: '2026-01-10', to: '2026-01-10', crs: 'gcj02', label: 'Synthetic saved label', view });
+  await record('Set date range, grid, saved label and preserve view', { from: '2026-01-10', to: '2026-01-10', grid: true, label: 'Synthetic saved label', view });
   await replace(fresh);
   const freshSnapshot = await doctor(url, fresh);
   await record('Atomically replace server dataset then focus browser', { ride_count: fresh.summary.ride_count });
@@ -106,7 +105,7 @@ try {
   assert.match(await page.locator('#visible-stat').textContent(), /1 次/);
   assert.equal(await page.locator('#from').inputValue(), '2026-01-10');
   assert.equal(await page.locator('#to').inputValue(), '2026-01-10');
-  assert.equal(await page.locator('#crs').inputValue(), 'gcj02');
+  assert.equal(await page.locator('#show-grid').isChecked(), true);
   assert.equal(await page.locator('.place-name').first().textContent(), 'Synthetic saved label');
   assert.equal(await page.locator('.leaflet-map-pane').getAttribute('style'), view);
   if (evidence) await page.screenshot({ path: path.join(evidence, 'after.png') });
@@ -126,7 +125,7 @@ try {
   assert.deepEqual(errors, []);
   proof.passed = true;
   await record('No external requests or page errors', { external, errors });
-  console.log('Synthetic browser refresh passed: live update, date/CRS/labels/view retained, invalid update retained, manual import retained, zero external requests.');
+  console.log('Synthetic browser refresh passed: live update, date/grid/labels/view retained, invalid update retained, manual import retained, zero external requests.');
 } catch (error) {
   await record('Failed verification', { message: error.message });
   throw error;

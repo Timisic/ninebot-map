@@ -92,6 +92,7 @@ def sync(client, sn, start, end, data, max_pages=100, refresh_details=False):
     print(f"合并导出：{result.report_directory}")
     if result.dataset_directory:
         print(f"标准数据：{result.dataset_directory}/dataset.json")
+        print("打开本地地图：./run map（自动读取最新标准数据，无需重新登录）")
     if result.has_gaps:
         print('本次采集有缺口或未知项；详见档案中的 last-task.json 和合并报告。')
         return 2
@@ -132,11 +133,13 @@ def main(argv=None):
     dataset.add_argument('--map-from', help='地图起点：YYYY-MM-DD 或带时区的 ISO 时间；省略时复用已保存设置')
     dataset.add_argument('--timezone', help='IANA 时区；默认复用已保存设置或 Asia/Shanghai')
     dataset.add_argument('--all-map-tracks', action='store_true', help='清除地图起始时间，使用全部可用采样轨迹')
-    viewer = sub.add_parser('map', help='离线打开本地骑行地图，不读取账号')
-    viewer.add_argument('--dataset', type=Path, help='显式选择 Ride Dataset v1 文件；省略则打开空白导入页')
+    viewer = sub.add_parser('map', help='打开本地骑行地图，无需登录九号')
+    source = viewer.add_mutually_exclusive_group()
+    source.add_argument('--dataset', type=Path, help='显式选择 Ride Dataset v1 文件')
+    source.add_argument('--empty', action='store_true', help='打开空白导入页，不自动选择本地数据')
     viewer.add_argument('--port', type=int, default=8765, help='本地端口；0 表示自动选择')
     viewer.add_argument('--no-open', action='store_true', help='只启动本地服务，不打开浏览器')
-    viewer.add_argument('--latest', action='store_true', help='读取本地最新标准数据，自动跟随同步更新')
+    source.add_argument('--latest', action='store_true', help='要求有已选车辆或唯一档案，必要时离线生成标准数据')
     schedule = sub.add_parser('schedule', help='管理本机定期增量同步')
     schedule.add_argument('action', choices=('install', 'status', 'run', 'disable', 'uninstall'))
     schedule.add_argument('--interval-days', type=float, help='连续间隔天数，默认 10；重复安装时保留已设周期')
@@ -162,20 +165,31 @@ def main(argv=None):
     if args.command == 'map':
         from .map_server import serve_map
         path = args.dataset
-        if args.latest:
-            if path:
-                raise ValueError('--latest 与 --dataset 不能同时使用')
+        if not args.dataset and not args.empty:
             prefs_path = args.config_dir / 'preferences.json'
             prefs = read_json(prefs_path) if prefs_path.exists() else {}
             archives = RideArchive.discover(args.data_dir)
-            archive = RideArchive.for_vehicle(args.data_dir, prefs['sn']) if prefs.get('sn') else (archives[0] if len(archives) == 1 else None)
-            if archive is None:
+            if prefs.get('sn'):
+                archive = RideArchive.for_vehicle(args.data_dir, prefs['sn'])
+            else:
+                candidates = archives if args.latest else [item for item in archives if (item.path / 'prepared' / 'dataset.json').is_file()]
+                archive = candidates[0] if len(candidates) == 1 else None
+            if archive is not None:
+                candidate = archive.path / 'prepared' / 'dataset.json'
+                if candidate.is_file():
+                    path = candidate
+                elif args.latest:
+                    if not prepare_configured(archive):
+                        raise ValueError('请先运行 ./run prepare。')
+                    path = candidate
+            elif args.latest:
                 raise ValueError('请指定 --dataset 或先选择车辆并运行 prepare。')
-            path = archive.path / 'prepared' / 'dataset.json'
-            if not path.exists():
-                directory = prepare_configured(archive)
-                if not directory:
-                    raise ValueError('请先运行 ./run prepare。')
+            if path is None:
+                print('没有可自动选择的标准数据，打开导入页。可用 --dataset 指定文件；多个车辆请先选择。')
+        if path:
+            print(f'地图数据：{path.absolute()}', flush=True)
+            if args.data_dir.is_symlink():
+                print(f'本地档案目录：{args.data_dir.resolve()}（data 为符号链接）', flush=True)
         return serve_map(path, args.port, args.no_open)
     config, data = args.config_dir.resolve(), args.data_dir.resolve()
     if args.command == 'cloud':

@@ -8,6 +8,7 @@ from unittest.mock import patch
 
 from nbmap.map_server import ASSETS, create_server
 from nbmap.__main__ import main
+from nbmap.archive import RideArchive
 
 FIXTURE = Path(__file__).parent / 'fixtures' / 'synthetic-map.json'
 
@@ -121,8 +122,84 @@ class MapServerTests(unittest.TestCase):
 
     def test_cli_map_branches_before_credentials_or_client(self):
         with patch('nbmap.__main__.Client', side_effect=AssertionError('must not construct client')), patch('nbmap.__main__.private_dir', side_effect=AssertionError('must not read private directory')), patch('nbmap.map_server.serve_map', return_value=0) as serve:
-            self.assertEqual(main(['map', '--no-open', '--port', '0']), 0)
+            self.assertEqual(main(['map', '--empty', '--no-open', '--port', '0']), 0)
             serve.assert_called_once_with(None, 0, True)
+
+
+class MapSourceTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.data = self.root / 'data'
+        self.config = self.root / 'config'
+        self.config.mkdir()
+        self.serve = self.enterContext(patch('nbmap.map_server.serve_map', return_value=0))
+        self.enterContext(patch('nbmap.__main__.Client', side_effect=AssertionError('no account access')))
+        self.enterContext(patch('nbmap.__main__.private_dir', side_effect=AssertionError('no storage creation')))
+        self.prepare = self.enterContext(patch('nbmap.__main__.prepare_configured', side_effect=AssertionError('auto must not prepare')))
+        self.addCleanup(self.temp.cleanup)
+
+    def dataset(self, serial):
+        path = RideArchive.for_vehicle(self.data, serial).path / 'prepared' / 'dataset.json'
+        path.parent.mkdir(parents=True)
+        path.write_bytes(FIXTURE.read_bytes())
+        return path
+
+    def run_map(self, *options):
+        self.assertEqual(main(['--data-dir', str(self.data), '--config-dir', str(self.config), 'map', '--no-open', *options]), 0)
+        return self.serve.call_args.args[0]
+
+    def test_selected_vehicle_wins_over_other_prepared_data(self):
+        self.dataset('other')
+        selected = self.dataset('selected')
+        (self.config / 'preferences.json').write_text(json.dumps({'sn': 'selected'}))
+        self.assertEqual(self.run_map(), selected)
+        self.serve.assert_called_once_with(selected, 8765, True)
+
+    def test_unique_prepared_dataset_opens_without_preferences(self):
+        selected = self.dataset('unique')
+        RideArchive.for_vehicle(self.data, 'not-prepared').path.mkdir()
+        self.assertEqual(self.run_map(), selected)
+
+    def test_empty_ambiguous_and_missing_selected_use_importer(self):
+        self.assertIsNone(self.run_map())
+        self.dataset('one')
+        self.dataset('two')
+        self.assertIsNone(self.run_map())
+        (self.config / 'preferences.json').write_text(json.dumps({'sn': 'missing'}))
+        self.assertIsNone(self.run_map())
+        self.assertIsNone(self.run_map('--empty'))
+
+    def test_explicit_dataset_and_empty_do_not_read_preferences(self):
+        selected = self.dataset('one')
+        (self.config / 'preferences.json').write_text('{broken')
+        self.assertEqual(self.run_map('--dataset', str(selected)), selected)
+        self.assertIsNone(self.run_map('--empty'))
+
+    def test_latest_is_strict_and_preserves_prepare_behavior(self):
+        with self.assertRaises(ValueError):
+            self.run_map('--latest')
+        selected = self.dataset('one')
+        self.assertEqual(self.run_map('--latest'), selected)
+        selected.unlink()
+        self.prepare.side_effect = None
+        self.prepare.return_value = selected.parent
+        self.assertEqual(self.run_map('--latest'), selected)
+        self.prepare.assert_called_once()
+
+    def test_symlinked_data_directory_remains_readable(self):
+        selected = self.dataset('one')
+        destination = self.root / 'Application Support' / 'Ninebot Map' / 'data'
+        destination.parent.mkdir(parents=True)
+        self.data.rename(destination)
+        self.data.symlink_to(destination, target_is_directory=True)
+        self.assertEqual(self.run_map(), selected)
+
+    def test_source_options_are_mutually_exclusive(self):
+        for options in [('--empty', '--latest'), ('--empty', '--dataset', str(FIXTURE)), ('--latest', '--dataset', str(FIXTURE))]:
+            with self.assertRaises(SystemExit) as raised:
+                self.run_map(*options)
+            self.assertEqual(raised.exception.code, 2)
 
 
 if __name__ == '__main__':
