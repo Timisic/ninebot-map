@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import json
 import tempfile
 import unittest
@@ -152,12 +153,37 @@ class PublicMapTests(unittest.TestCase):
                 self.assertEqual(key_path.stat().st_mode & 0o777, 0o600)
                 validate_public(json.loads(kwargs['data']))
                 self.assertNotIn(b'snapshot_ids', kwargs['data'])
+                return subprocess.CompletedProcess(args, 0, stdout=('Published public map ' + hashlib.sha256(kwargs['data']).hexdigest() + '\n').encode(), stderr=b'')
             with patch.dict('os.environ', {'MAP_DEPLOY_KEY': 'synthetic-secret'}), patch('nbmap.cloud.command', side_effect=send):
                 publish_site_data(root, source, {'host': 'example.invalid', 'user': 'map', 'known_hosts': 'synthetic public host key'}, '2026-10-05T08:00:00Z')
             self.assertEqual(len(calls), 1)
             self.assertIn('StrictHostKeyChecking=yes', calls[0][0])
             self.assertEqual(calls[0][0][-1], 'publish-map')
             self.assertEqual(list(root.iterdir()), [source])
+            with patch.dict('os.environ', {'MAP_DEPLOY_KEY': 'synthetic-secret'}), patch('nbmap.cloud.command', return_value=subprocess.CompletedProcess([], 0, stdout=b'Published public map wrong', stderr=b'')):
+                with self.assertRaisesRegex(ValueError, '回执'):
+                    publish_site_data(root, source, {'host': 'example.invalid', 'user': 'map', 'known_hosts': 'synthetic public host key'}, '2026-10-05T08:00:00Z')
+            self.assertEqual(list(root.iterdir()), [source])
+
+    def test_publisher_hash_matches_the_real_receiver_protocol(self):
+        from unittest.mock import patch
+        from nbmap.cloud import publish_site_data
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            sender = root / 'sender'
+            sender.mkdir()
+            target = root / 'server/data/dataset.json'
+            source = sender / 'source.json'
+            source.write_text(json.dumps(self.dataset))
+            def receive(args, **kwargs):
+                result = subprocess.run([sys.executable, 'scripts/receive-public-map.py', '--target', str(target)], input=kwargs['data'], capture_output=True)
+                self.assertEqual(result.returncode, 0)
+                return result
+            with patch.dict('os.environ', {'MAP_DEPLOY_KEY': 'synthetic-secret'}), patch('nbmap.cloud.command', side_effect=receive):
+                receipt = publish_site_data(sender, source, {'host': 'example.invalid', 'user': 'map', 'known_hosts': 'synthetic public host key'}, '2026-10-05T08:00:00Z')
+            self.assertEqual(receipt, hashlib.sha256(target.read_bytes()).hexdigest())
+            self.assertEqual(json.loads(target.read_bytes())['updated_at'], '2026-10-05T08:00:00Z')
+            self.assertEqual(list(sender.iterdir()), [source])
 
 
 if __name__ == '__main__':

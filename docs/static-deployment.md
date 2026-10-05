@@ -41,3 +41,11 @@
 在已存在的远程托管 Cloudflare Tunnel 中，仅新增用户授权的 `map.timisic.cc` 到 `http://127.0.0.1:8766` 的 published application 路由。不要修改其他路由、公开新的服务器监听端口或输出 Tunnel token。配置方法见 [Cloudflare 官方说明](https://developers.cloudflare.com/tunnel/get-started/)。
 
 先运行 `npm run verify`。部署后验证实际 HTTPS 域名、静态资源、更新时间和数据摘要。用一次获授权同步验证 GitHub Actions 到服务器的数据发布，并核对服务端数据哈希。DNS 配置完成不等于网站部署完成，本地或模拟测试不等于真实链路通过。
+
+## 仅重新发布已有档案
+
+`sync.yml` 提供 `publish_only` 手动输入。将它设为 true，保持 force=false，会跳过10天采集门控并只发布已保存的成功档案。它不调用九号、不采用新的会话revision，也不改写 last_success。没有成功档案或已停用同步时拒绝操作，force与publish_only不能同时为true。
+
+首次启用网站发布前，先由用户确认专用权限并安全设置MAP_DEPLOY_KEY，再把经核对的site目标加入私有配置。之后手动触发 publish_only=true 即可验收，无须重新采集。公开PNG仍走原有发布逻辑，完整展示JSON只经SSH发给指定接收器，不提交公开GitHub。
+
+发布回执记录 mode、last_success_before、last_success_after、publication_pending 和 site_sha256。验收要求mode为publish_only、两个成功时间相同、pending=false，并且网站dataset.json的实际SHA-256等于site_sha256。网站更新时间仍采用原采集成功时间，不采用本次重新发布时间。

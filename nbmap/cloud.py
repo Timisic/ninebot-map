@@ -104,8 +104,12 @@ def public_fingerprint(public):
     return 'SHA256:' + base64.b64encode(hashlib.sha256(base64.b64decode(public.split()[1])).digest()).decode().rstrip('=')
 
 
-def is_cloud_due(payload, session, settings, *, force=False, now=None):
+def is_cloud_due(payload, session, settings, *, force=False, publish_only=False, now=None):
+    if force and publish_only:
+        raise ValueError('force 与 publish_only 不能同时启用')
     state = payload['files'].get('sessions/schedule-state.json', {})
+    if publish_only:
+        return bool(settings.get('enabled', True) and state.get('status') == 'success' and state.get('last_success'))
     return bool(settings.get('enabled', True) and (force or state.get('publication_pending') or
         session['revision'] != payload.get('credential_revision') or
         (now or datetime.now(timezone.utc)) >= next_due(settings, state)))
@@ -116,8 +120,11 @@ def gate(root):
     command(['git', 'fetch', '--depth', '1', 'origin', 'state'], cwd=root)
     blob = command(['git', 'show', 'FETCH_HEAD:state.enc'], cwd=root).stdout
     payload = unseal(blob, os.environ['CLOUD_STATE_KEY'].encode())
-    session = json.loads(os.environ['NINEBOT_SESSION'])
-    due = is_cloud_due(payload, session, settings, force=os.environ.get('SYNC_FORCE', '').lower() == 'true')
+    publish_only = os.environ.get('SYNC_PUBLISH_ONLY', '').lower() == 'true'
+    session = None if publish_only else json.loads(os.environ['NINEBOT_SESSION'])
+    due = is_cloud_due(payload, session, settings, force=os.environ.get('SYNC_FORCE', '').lower() == 'true', publish_only=publish_only)
+    if publish_only and not due:
+        raise ValueError('没有可仅发布的成功档案，或同步已停用')
     with open(os.environ['GITHUB_OUTPUT'], 'a') as stream:
         stream.write('due=' + str(due).lower() + '\n')
     print('Due-time checked; no Ninebot requests.')
@@ -166,20 +173,26 @@ def publish_site_data(root, dataset, destination, updated_at):
     if not key or not destination.get('known_hosts'):
         raise ValueError('静态发布缺少专用密钥或已核对的主机公钥')
     public = public_dataset(read_json(dataset), updated_at)
-    body = json.dumps(public, ensure_ascii=False, allow_nan=False, separators=(',', ':')).encode()
+    body = json.dumps(public, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(',', ':')).encode()
+    digest = hashlib.sha256(body).hexdigest()
     with tempfile.TemporaryDirectory(prefix='site-publish-', dir=root) as directory:
         key_path, hosts_path = Path(directory) / 'identity', Path(directory) / 'known_hosts'
         write_text(key_path, key.replace('\r\n', '\n').strip() + '\n')
         write_text(hosts_path, destination['known_hosts'].strip() + '\n')
-        command(['ssh', '-T', '-i', str(key_path), '-p', str(port), '-o', 'IdentitiesOnly=yes', '-o', 'BatchMode=yes',
+        result = command(['ssh', '-T', '-i', str(key_path), '-p', str(port), '-o', 'IdentitiesOnly=yes', '-o', 'BatchMode=yes',
                  '-o', 'StrictHostKeyChecking=yes', '-o', f'UserKnownHostsFile={hosts_path}',
                  f'{user}@{host}', 'publish-map'], data=body, timeout=120)
+        if result.stdout.decode().strip() != 'Published public map ' + digest:
+            raise ValueError('服务器发布回执与地图数据不一致')
+    return digest
 
 
-def execute_worker(payload, key, session, settings, root, *, force=False, source=None, now=None):
+def execute_worker(payload, key, session, settings, root, *, force=False, publish_only=False, source=None, now=None):
+    if force and publish_only:
+        raise ValueError('force 与 publish_only 不能同时启用')
     restore(payload, root)
     config, data = root / 'sessions', root / 'data'
-    revised = session['revision'] != payload.get('credential_revision')
+    revised = not publish_only and session['revision'] != payload.get('credential_revision')
     revision = payload.get('credential_revision')
     if revised:
         for name, value in session['files'].items():
@@ -194,7 +207,12 @@ def execute_worker(payload, key, session, settings, root, *, force=False, source
     schedule = {'enabled': settings.get('enabled', True), 'interval_days': interval}
     write_json(config / 'schedule.json', schedule)
     state = read_state(config)
-    due = schedule['enabled'] and (force or revised or clock >= next_due(schedule, state))
+    if publish_only:
+        if not schedule['enabled'] or state.get('status') != 'success' or not state.get('last_success'):
+            raise ValueError('没有可仅发布的成功档案，或同步已停用')
+        state['publication_pending'] = True
+        write_json(config / 'schedule-state.json', state)
+    due = not publish_only and schedule['enabled'] and (force or revised or clock >= next_due(schedule, state))
     if not due and not state.get('publication_pending'):
         return None, 0, []
     if due:
@@ -222,10 +240,12 @@ def worker(root):
     blob = command(['git', 'show', 'FETCH_HEAD:state.enc'], cwd=root).stdout
     key = os.environ['CLOUD_STATE_KEY'].encode()
     payload = unseal(blob, key)
-    session = json.loads(os.environ['NINEBOT_SESSION'])
+    publish_only = os.environ.get('SYNC_PUBLISH_ONLY', '').lower() == 'true'
+    session = None if publish_only else json.loads(os.environ['NINEBOT_SESSION'])
+    previous_success = payload['files'].get('sessions/schedule-state.json', {}).get('last_success')
     temporary = private_dir(root / 'work' / 'cloud-worker')
     updated, code, datasets = execute_worker(payload, key, session, settings, temporary,
-                                            force=os.environ.get('SYNC_FORCE', '').lower() == 'true')
+                                            force=os.environ.get('SYNC_FORCE', '').lower() == 'true', publish_only=publish_only)
     if updated is None:
         print('Not due; no Ninebot requests and no archive writes.')
         return 0
@@ -235,7 +255,7 @@ def worker(root):
             shutil.copyfile(root / 'github-known-hosts', temporary / 'known-hosts')
             publish_image(temporary, image, settings.get('publish_repos', []))
             if settings.get('site'):
-                publish_site_data(temporary, datasets[0], settings['site'], updated['files']['sessions/schedule-state.json']['last_success'])
+                updated['files']['sessions/schedule-state.json']['site_sha256'] = publish_site_data(temporary, datasets[0], settings['site'], updated['files']['sessions/schedule-state.json']['last_success'])
             publication = updated['files']['sessions/schedule-state.json']
             publication['publication_pending'] = False
             publication.pop('publication_error', None)
@@ -258,6 +278,8 @@ def worker(root):
     command(['git', '-c', 'user.name=Ninebot Map Sync', '-c', 'user.email=sync@users.noreply.github.com',
              'commit', '-m', 'Update encrypted sync state'], cwd=output)
     command(['git', 'push', 'origin', 'HEAD:state'], cwd=output)
+    state = updated['files'].get('sessions/schedule-state.json', {})
+    print('Publication receipt: ' + json.dumps({'mode': 'publish_only' if publish_only else 'sync', 'last_success_before': previous_success, 'last_success_after': state.get('last_success'), 'publication_pending': state.get('publication_pending'), 'site_sha256': state.get('site_sha256')}))
     print('Encrypted checkpoint saved. Only configured display outputs were published.')
     return code
 

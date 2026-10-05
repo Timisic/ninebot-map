@@ -1,5 +1,6 @@
 """Synthetic cloud state, merge, due-time and image fixtures. No production account."""
 import copy
+import hashlib
 import io
 import json
 import tempfile
@@ -64,9 +65,10 @@ class CloudTests(unittest.TestCase):
 
     def test_site_failure_keeps_success_clock_and_retries_publication(self):
         from nbmap.cloud import worker
-        for failure in (True, False):
-            with self.subTest(failure=failure):
-                root = self.root / ('worker-failed' if failure else 'worker-success')
+        self.payload['files']['sessions/schedule-state.json'] = {'status': 'success', 'last_success': NOW.isoformat(), 'publication_pending': False}
+        for failure, publish_only in ((True, False), (False, False), (True, True), (False, True)):
+            with self.subTest(failure=failure, publish_only=publish_only):
+                root = self.root / f'worker-{failure}-{publish_only}'
                 root.mkdir()
                 write_json(root / 'sync-settings.json', {'interval_days': 10, 'publish_repos': [], 'site': {'host': 'example.invalid'}})
                 (root / 'github-known-hosts').write_text('synthetic public host key')
@@ -77,13 +79,50 @@ class CloudTests(unittest.TestCase):
                         (root / 'work/state-publish').mkdir(parents=True)
                     return subprocess.CompletedProcess(args, 0, stdout=seal(self.payload, self.key) if args[:2] == ['git', 'show'] else b'', stderr=b'')
                 log = io.StringIO()
-                with patch.dict('os.environ', {'CLOUD_STATE_KEY': self.key.decode(), 'NINEBOT_SESSION': json.dumps(self.session)}), patch('nbmap.cloud.command', side_effect=git), patch('nbmap.cloud.execute_worker', return_value=(updated, 0, [self.archive.path / 'prepared/dataset.json'])), patch('nbmap.cloud.publish_image'), patch('nbmap.cloud.publish_site_data', side_effect=RuntimeError('PRIVATE_SENTINEL') if failure else None), redirect_stdout(log):
+                with patch.dict('os.environ', {'CLOUD_STATE_KEY': self.key.decode(), 'NINEBOT_SESSION': 'not JSON' if publish_only else json.dumps(self.session), 'SYNC_FORCE': 'false', 'SYNC_PUBLISH_ONLY': str(publish_only).lower()}), patch('nbmap.cloud.command', side_effect=git), patch('nbmap.cloud.execute_worker', return_value=(updated, 0, [self.archive.path / 'prepared/dataset.json'])) as executor, patch('nbmap.cloud.publish_image'), patch('nbmap.cloud.publish_site_data', return_value='a' * 64, side_effect=RuntimeError('PRIVATE_SENTINEL') if failure else None), redirect_stdout(log):
                     self.assertEqual(worker(root), 1 if failure else 0)
                 state = unseal((root / 'work/state-publish/state.enc').read_bytes(), self.key)['files']['sessions/schedule-state.json']
                 self.assertEqual(state['last_success'], NOW.isoformat())
                 self.assertEqual(state['publication_pending'], failure)
                 self.assertEqual('site_published_at' in state, not failure)
                 self.assertNotIn('PRIVATE_SENTINEL', log.getvalue())
+                self.assertEqual(executor.call_args.kwargs['publish_only'], publish_only)
+                if publish_only:
+                    self.assertIsNone(executor.call_args.args[2])
+                receipt = json.loads(next(line.split('Publication receipt: ', 1)[1] for line in log.getvalue().splitlines() if line.startswith('Publication receipt: ')))
+                self.assertEqual(receipt['mode'], 'publish_only' if publish_only else 'sync')
+                self.assertEqual(receipt['last_success_before'], receipt['last_success_after'])
+                self.assertEqual(receipt['publication_pending'], failure)
+
+    def test_due_collection_automatically_publishes_site_and_keeps_png_path(self):
+        from nbmap.cloud import worker
+        root = self.root / 'normal-pipeline'
+        root.mkdir()
+        site = {'host': 'example.invalid', 'user': 'map', 'port': 22, 'known_hosts': 'synthetic public host key'}
+        images = [{'repo': 'fixture/map', 'branch': 'main'}, {'repo': 'fixture/profile', 'branch': 'main'}]
+        write_json(root / 'sync-settings.json', {'interval_days': 10, 'publish_repos': images, 'site': site})
+        (root / 'github-known-hosts').write_text('synthetic public host key')
+        previous = (NOW - timedelta(days=11)).isoformat()
+        self.payload['files']['sessions/schedule-state.json'] = {'status': 'success', 'last_success': previous, 'publication_pending': False}
+        source = Source()
+        target = self.root / 'synthetic-server/data/dataset.json'
+        def transport(args, **kwargs):
+            if args[0] == 'ssh':
+                return subprocess.run([sys.executable, 'scripts/receive-public-map.py', '--target', str(target)], input=kwargs['data'], capture_output=True)
+            if args[:2] == ['git', 'worktree']:
+                (root / 'work/state-publish').mkdir(parents=True)
+            return subprocess.CompletedProcess(args, 0, stdout=seal(self.payload, self.key) if args[:2] == ['git', 'show'] else b'', stderr=b'')
+        def collect(*args, **kwargs):
+            return execute_worker(*args, **{**kwargs, 'source': source, 'now': NOW})
+        with patch.dict('os.environ', {'CLOUD_STATE_KEY': self.key.decode(), 'NINEBOT_SESSION': json.dumps(self.session), 'MAP_DEPLOY_KEY': 'synthetic-key', 'SYNC_FORCE': 'false', 'SYNC_PUBLISH_ONLY': 'false'}), patch('nbmap.cloud.command', side_effect=transport), patch('nbmap.cloud.execute_worker', side_effect=collect), patch('nbmap.cloud.publish_image') as png, redirect_stdout(io.StringIO()):
+            self.assertEqual(worker(root), 0)
+        self.assertGreater(len(source.requests), 0)
+        self.assertEqual(png.call_args.args[2], images)
+        state = unseal((root / 'work/state-publish/state.enc').read_bytes(), self.key)['files']['sessions/schedule-state.json']
+        self.assertEqual(state['last_success'], NOW.isoformat())
+        self.assertFalse(state['publication_pending'])
+        self.assertEqual(read_json(target)['updated_at'], NOW.isoformat())
+        self.assertEqual(state['site_sha256'], hashlib.sha256(target.read_bytes()).hexdigest())
 
     def test_authenticated_compact_roundtrip_and_no_plaintext(self):
         blob = seal(self.payload, self.key)
@@ -126,6 +165,35 @@ class CloudTests(unittest.TestCase):
                                           self.root / 'late', source=source, now=NOW + timedelta(days=40))
         self.assertEqual(code, 0)
         self.assertEqual(due['files']['sessions/schedule-state.json']['last_success'], (NOW + timedelta(days=40)).isoformat())
+
+    def test_publish_only_reuses_successful_archive_without_collection_or_clock_change(self):
+        source = Source()
+        saved, _, _ = execute_worker(self.payload, self.key, self.session, {'interval_days': 10}, self.root / 'collected', source=source, now=NOW, force=True)
+        saved['files']['sessions/schedule-state.json']['publication_pending'] = False
+        previous = copy.deepcopy(saved['files']['sessions/schedule-state.json'])
+        revised_session = {**self.session, 'revision': (NOW + timedelta(days=1)).isoformat()}
+        for days in (1, 20):
+            with self.subTest(days=days), patch('nbmap.cloud.run_due', side_effect=AssertionError('must not collect')) as collect:
+                result, code, paths = execute_worker(saved, self.key, revised_session, {'interval_days': 10}, self.root / f'publish-{days}', publish_only=True, now=NOW + timedelta(days=days))
+                collect.assert_not_called()
+                self.assertEqual(code, 0)
+                self.assertEqual(result['credential_revision'], saved['credential_revision'])
+                state = result['files']['sessions/schedule-state.json']
+                self.assertEqual({**state, 'publication_pending': False}, previous)
+                self.assertEqual(result['files']['sessions/tokens.json'], saved['files']['sessions/tokens.json'])
+                self.assertEqual({k: v for k, v in result['files'].items() if k.startswith('data/')}, {k: v for k, v in saved['files'].items() if k.startswith('data/')})
+                self.assertEqual(read_json(paths[0])['summary']['ride_count'], 2)
+        self.assertFalse(is_cloud_due(saved, self.session, {'interval_days': 10}, now=NOW + timedelta(hours=1)))
+        self.assertTrue(is_cloud_due(saved, self.session, {'interval_days': 10}, publish_only=True, now=NOW + timedelta(hours=1)))
+        with self.assertRaises(ValueError):
+            is_cloud_due(saved, self.session, {'interval_days': 10}, force=True, publish_only=True)
+        with self.assertRaises(ValueError):
+            execute_worker(saved, self.key, self.session, {'interval_days': 10}, self.root / 'conflict', force=True, publish_only=True)
+        with self.assertRaises(ValueError):
+            execute_worker(self.payload, self.key, self.session, {'interval_days': 10}, self.root / 'no-success', publish_only=True)
+        self.assertFalse(is_cloud_due(saved, None, {'interval_days': 10, 'enabled': False}, publish_only=True))
+        with self.assertRaises(ValueError):
+            execute_worker(saved, self.key, None, {'interval_days': 10, 'enabled': False}, self.root / 'disabled', publish_only=True)
 
     def test_cloud_gate_respects_interval_retry_publication_and_disable(self):
         payload = copy.deepcopy(self.payload)

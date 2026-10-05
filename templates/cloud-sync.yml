@@ -8,6 +8,10 @@ on:
         description: Sync immediately, ignoring the persisted due time
         type: boolean
         default: false
+      publish_only:
+        description: Republish the saved successful archive without collection or clock reset
+        type: boolean
+        default: false
 permissions:
   contents: write
 concurrency:
@@ -32,6 +36,7 @@ jobs:
           NINEBOT_SESSION: ${{ secrets.NINEBOT_SESSION }}
           CLOUD_STATE_KEY: ${{ secrets.CLOUD_STATE_KEY }}
           SYNC_FORCE: ${{ inputs.force }}
+          SYNC_PUBLISH_ONLY: ${{ inputs.publish_only }}
         run: .venv/bin/python -m nbmap.cloud gate
   sync:
     needs: due
@@ -57,4 +62,5 @@ jobs:
           PUBLIC_DEPLOY_KEY_2: ${{ secrets.PUBLIC_DEPLOY_KEY_2 }}
           MAP_DEPLOY_KEY: ${{ secrets.MAP_DEPLOY_KEY }}
           SYNC_FORCE: ${{ inputs.force }}
+          SYNC_PUBLISH_ONLY: ${{ inputs.publish_only }}
         run: .venv/bin/python -m nbmap.cloud worker
