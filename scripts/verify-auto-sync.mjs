@@ -82,12 +82,7 @@ try {
   await page.waitForFunction(() => document.querySelector('#history-stat').textContent.includes('1 次'));
   if (evidence) await page.screenshot({ path: path.join(evidence, 'before.png') });
   await record('Launch normal map CLI with synthetic dataset', { history: await page.locator('#history-stat').textContent() });
-  await page.locator('#date-panel > summary').click();
-  await page.locator('#from').fill('2026-01-10');
-  await page.locator('#from').dispatchEvent('change');
-  await page.locator('#to').fill('2026-01-10');
-  await page.locator('#to').dispatchEvent('change');
-  await page.locator('#date-panel > summary').click();
+  assert.equal(await page.locator('#date-panel, #from, #to').count(), 0);
   await page.locator('#map-options > summary').click();
   await page.locator('#show-grid').check();
   await page.locator('#map-options > summary').click();
@@ -96,15 +91,13 @@ try {
   await page.locator('#edit-place').click(); await page.locator('#place-label').fill('Synthetic saved label');
   await page.locator('#label-form button[type=submit]').click();
   const view = await page.locator('.leaflet-map-pane').getAttribute('style');
-  await record('Set date range, grid, saved label and preserve view', { from: '2026-01-10', to: '2026-01-10', grid: true, label: 'Synthetic saved label', view });
+  await record('Set grid, saved label and preserve view', { grid: true, label: 'Synthetic saved label', view });
   await replace(fresh);
   const freshSnapshot = await doctor(url, fresh);
   await record('Atomically replace server dataset then focus browser', { ride_count: fresh.summary.ride_count });
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await page.waitForFunction(() => document.querySelector('#history-stat').textContent.includes('2 次'));
-  assert.match(await page.locator('#visible-stat').textContent(), /1 次/);
-  assert.equal(await page.locator('#from').inputValue(), '2026-01-10');
-  assert.equal(await page.locator('#to').inputValue(), '2026-01-10');
+  assert.match(await page.locator('#visible-stat').textContent(), /2 次/);
   assert.equal(await page.locator('#show-grid').isChecked(), true);
   assert.equal(await page.locator('.place-name').first().textContent(), 'Synthetic saved label');
   assert.equal(await page.locator('.leaflet-map-pane').getAttribute('style'), view);
@@ -115,11 +108,103 @@ try {
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   assert.match(await page.locator('#history-stat').textContent(), /2 次/);
   assert.equal(await page.locator('input[type=file], #import-button').count(), 0);
+  assert.equal(await page.locator('#update-map').isDisabled(), true);
+  assert.match(await page.locator('#update-map').getAttribute('title'), /暂不支持/);
+
+  let updateStatus = { phase: 'idle', can_request: true, requested_at: null, next_allowed_at: null };
+  let responseCode = 202, postCount = 0;
+  const requestedAt = '2026-10-06T00:00:00Z';
+  const nextAllowedAt = new Date(Date.now() + 12 * 60 * 60 * 1000).toISOString();
+  await page.route(url + 'api/update', async route => {
+    const request = route.request();
+    if (request.method() === 'POST') {
+      postCount++;
+      assert.equal(request.headers()['content-type'], 'application/json');
+      assert.equal(request.postData(), '{}');
+      if (responseCode === 202) updateStatus = { phase: 'queued', can_request: false, requested_at: requestedAt, next_allowed_at: nextAllowedAt };
+    }
+    await route.fulfill({ status: request.method() === 'POST' ? responseCode : 200, contentType: 'application/json', body: JSON.stringify(updateStatus) });
+  });
+  await replace(fresh);
+  await page.reload();
+  await page.waitForFunction(() => !document.querySelector('#update-map').disabled);
+  await page.locator('#map-options > summary').click();
+  await page.locator('#show-grid').check();
+  await page.locator('#map-options > summary').click();
+  await page.locator('#theme-toggle').click();
+  await page.locator('button[data-theme-preference=dark]').click();
+  await page.locator('#toggle-places').click();
+  await page.locator('.place-button').first().click();
+  const selectedId = await page.locator('.place-button[aria-pressed=true]').getAttribute('data-place-id');
+  await page.locator('#edit-place').click();
+  await page.locator('#place-label').fill('Synthetic unsaved draft');
+  const updateView = await page.locator('.leaflet-map-pane').getAttribute('style');
+  await page.locator('#update-map').click();
+  await page.waitForFunction(() => document.querySelector('#update-status').textContent === '等待更新');
+  assert.equal(postCount, 1);
+  await page.locator('#update-map').click();
+  assert.equal(await page.locator('#inline-hint').textContent(), '正在Riding中...');
+  const ridingHint = await page.locator('#inline-hint').evaluate(element => {
+    const style = getComputedStyle(element); return [style.backgroundColor, style.color, style.fontSize, style.borderRadius];
+  });
+  await page.locator('#running').click();
+  assert.equal(await page.locator('#inline-hint').textContent(), '正在running中...');
+  assert.deepEqual(await page.locator('#inline-hint').evaluate(element => {
+    const style = getComputedStyle(element); return [style.backgroundColor, style.color, style.fontSize, style.borderRadius];
+  }), ridingHint);
+  assert.equal(postCount, 1);
+  updateStatus.phase = 'running';
+  await page.waitForFunction(() => document.querySelector('#update-status').textContent === '更新中');
+  updateStatus.phase = 'succeeded';
+  await page.waitForFunction(() => document.querySelector('#update-status').textContent === '等待地图更新');
+  assert.match(await page.locator('#visible-stat').textContent(), /2 次/);
+  const published = makeDataset([
+    { id: 'old', xy: [[0, 0], [100, 0], [200, 0]], date: '2026-01-10' },
+    { id: 'new', xy: [[0, 0], [100, 0], [200, 0]], date: '2026-01-11' },
+    { id: 'published', xy: [[0, 0], [100, 0], [200, 0]], date: '2026-01-12' },
+  ]);
+  published.updated_at = '2026-10-06T00:01:00Z';
+  await replace(published);
+  await page.waitForFunction(() => document.querySelector('#update-status').textContent === '地图已更新');
+  assert.match(await page.locator('#visible-stat').textContent(), /3 次/);
+  assert.equal(await page.locator('#place-label').inputValue(), 'Synthetic unsaved draft');
+  assert.equal(await page.locator('.place-button[aria-pressed=true]').getAttribute('data-place-id'), selectedId);
+  assert.equal(await page.locator('#show-grid').isChecked(), true);
+  assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark');
+  assert.equal(await page.locator('.leaflet-map-pane').getAttribute('style'), updateView);
+  await record('Public update waits for workflow and published data, retaining draft, selection, grid, theme and view', { postCount, history: await page.locator('#history-stat').textContent(), status: await page.locator('#update-status').textContent() });
+
+  updateStatus = { phase: 'idle', can_request: true, requested_at: null, next_allowed_at: null };
+  await page.reload();
+  await page.waitForFunction(() => !document.querySelector('#update-map').disabled);
+  responseCode = 429;
+  updateStatus = { phase: 'succeeded', can_request: false, requested_at: requestedAt, next_allowed_at: nextAllowedAt };
+  await page.locator('#update-map').click();
+  await page.waitForFunction(() => document.querySelector('#inline-hint').textContent === '正在Riding中...');
+  assert.equal(postCount, 2);
+  await page.locator('#update-map').click();
+  assert.equal(postCount, 2);
+  await record('Server cooldown and repeated clicks share the activity hint without further dispatch', { postCount });
+
+  for (const [code, phase, hint] of [[502, 'failed', '更新未能开始'], [503, 'unavailable', '更新服务暂不可用']]) {
+    updateStatus = { phase: 'idle', can_request: true, requested_at: null, next_allowed_at: null };
+    await page.reload();
+    await page.waitForFunction(() => !document.querySelector('#update-map').disabled);
+    responseCode = code;
+    updateStatus = { phase, can_request: code === 502, requested_at: null, next_allowed_at: null };
+    await page.locator('#update-map').click();
+    await page.waitForFunction(text => document.querySelector('#inline-hint').textContent.includes(text), hint);
+    assert.match(await page.locator('#visible-stat').textContent(), /3 次/);
+    assert.equal(await page.locator('#error').isVisible(), false);
+    if (code === 502) assert.match(await page.locator('#update-status').textContent(), /未完成/);
+    if (code === 503) assert.equal(await page.locator('#update-map').isDisabled(), true);
+  }
+  await record('Dispatch rejection and unavailable update service retain the visible map', { postCount, phases: ['failed', 'unavailable'] });
   assert.deepEqual(external, []);
   assert.deepEqual(errors, []);
   proof.passed = true;
   await record('No external requests or page errors', { external, errors });
-  console.log('Synthetic browser refresh passed: live update, date/grid/labels/view retained, invalid update retained, no manual import, zero external requests.');
+  console.log('Synthetic browser refresh passed: live update, grid/labels/view retained, invalid update retained, no manual import, zero external requests.');
 } catch (error) {
   await record('Failed verification', { message: error.message });
   throw error;

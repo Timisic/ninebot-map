@@ -1,33 +1,23 @@
-# Endpoint loading and date filtering
+# Dataset loading and Along navigation
 
-A user opens a local map, loads the configured dataset endpoint and filters map rides without changing all-history totals.
+A user opens a local map and sees the configured dataset with visible-map and all-history totals next to the route legend.
 
 ## Sub-features
 
 - `read-only-page` has no file picker, drop importer or upload endpoint.
 - `launch-dataset` opens a dataset supplied on the CLI.
-- `date-range` filters the visible routes inclusively.
+- `activity-navigation` displays Riding ｜ Running and a short Running hint.
+- `quiet-statistics` uses the existing legend's 11px text without an extra frame.
 - `invalid-replacement` retains the previous valid map.
 
-## How to get to it (user POV)
+## How to get to it
 
-- Run `./run map` after collecting or downloading local data.
-- Run `./run map --dataset tests/fixtures/synthetic-map.json --port 0 --no-open`.
-- Expand the date panel, set dates, or choose all dates.
+Run `./run map --dataset tests/fixtures/synthetic-map.json --port 0 --no-open`.
 
 ## Driving it with Playwright
 
-Preconditions:
-
-- `npm run verify:doctor` succeeds.
-- Use only `tests/fixtures/synthetic-map.json` and generated synthetic datasets.
-
-Run `npm run verify -- --suite map`. Its harness starts the normal CLI, loads its owned source file, sets `#from`, reads `#visible-stat` and `#history-stat`, clears the range, then replaces the owned source with malformed JSON. Require twelve fixture rides initially, three visible rides after the fixture filter, unchanged twelve history rides, and retention of the prior map after invalid replacement.
-
-Read the map suite log. UI evidence can be requested through the wrapper's output directory.
+Run `npm run verify:doctor`, then `npm run verify -- --suite map` in a fresh context. Require twelve fixture rides, unchanged history totals, an Along browser title, activity navigation at 390px and 320px, and no date controls. Click `#running` and read “正在running中...” in `#inline-hint`. Replace the owned synthetic dataset with malformed JSON and require the previous map to remain.
 
 ## Gotchas
 
-- `--latest` uses the user's selected local archive; it is not part of the default synthetic run.
-- A range filter never expands the dataset's saved map scope.
-- Existing labels and browser state must not come from the user's actual browser profile.
+The dataset's saved map scope still limits the visible routes. Removing the page's date controls does not expand that scope. Use synthetic fixtures and a new browser context instead of the user's actual profile.

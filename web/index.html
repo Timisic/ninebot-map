@@ -1,8 +1,8 @@
 <!doctype html>
-<html lang="zh-CN" data-theme="dark">
+<html lang="zh-CN" data-theme="light">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>骑行地图</title>
+<title>Along</title>
 <script src="./theme-init.js"></script>
 <link rel="icon" href="data:,">
 <link rel="stylesheet" href="./vendor/leaflet/leaflet.css"><link rel="stylesheet" href="./styles.css">
@@ -10,17 +10,17 @@
 </head>
 <body>
 <header class="topbar">
-  <div class="title"><h1 id="page-title">骑行地图</h1><span id="local-status" role="status" aria-live="polite">正在读取数据</span></div>
+  <nav class="activity-nav" aria-label="运动"><span aria-current="page">Riding</span><span class="activity-divider" aria-hidden="true">｜</span><button id="running" type="button">Running</button></nav>
+  <span id="local-status" class="visually-hidden" role="status" aria-live="polite">正在读取数据</span>
   <div class="actions">
-    <button id="theme-toggle" type="button" aria-label="切换为浅色" title="切换为浅色"></button>
+    <details id="theme-options"><summary id="theme-toggle" aria-label="外观，跟随系统" title="外观，跟随系统"></summary><div class="theme-menu" role="group" aria-label="外观"><button type="button" data-theme-preference="system" aria-pressed="true">跟随系统</button><button type="button" data-theme-preference="light" aria-pressed="false">浅色</button><button type="button" data-theme-preference="dark" aria-pressed="false">深色</button></div></details>
     <button id="toggle-places" aria-expanded="false" aria-controls="places-panel">常去地点</button>
   </div>
 </header>
 <main id="workspace">
   <div id="map" aria-label="骑行轨迹地图" tabindex="0"></div>
-  <section class="toolbar" aria-label="地图筛选">
-    <div class="metrics" aria-live="polite"><span id="visible-stat">当前地图 <strong>暂无数据</strong></span><span id="history-stat">全部历史 <strong>暂无数据</strong></span><span id="updated-at"></span></div>
-    <details id="date-panel"><summary>日期</summary><div class="date-controls"><label>开始日期<input id="from" type="date" disabled></label><label>结束日期<input id="to" type="date" disabled></label><button id="clear-dates" disabled>全部日期</button></div></details>
+  <section class="toolbar" aria-label="数据更新">
+    <button id="update-map" type="button" disabled title="正在检查更新服务">更新</button><div class="update-meta"><span id="updated-at"></span><span id="update-status" role="status" aria-live="polite" hidden></span></div>
   </section>
   <aside id="places-panel" aria-label="常去地点">
     <div class="panel-heading"><div><h2>常去地点</h2><span id="place-total">0 处</span></div><button id="close-places" type="button">关闭</button></div>
@@ -41,8 +41,9 @@
       <label class="check"><span>经过次数</span><input id="show-grid" type="checkbox" disabled></label>
     </div></details>
   </div>
-  <div class="route-legend" aria-label="路线叠加，颜色越强表示重复经过越多"><span>路线叠加</span><i></i><i></i><i></i><span>多</span></div>
+  <section class="map-summary" aria-label="路线统计"><div class="metrics" aria-live="polite"><span id="visible-stat">当前地图 <strong>暂无数据</strong></span><span id="history-stat">全部历史 <strong>暂无数据</strong></span></div><div class="route-legend" aria-label="路线叠加，颜色越强表示重复经过越多"><span>路线叠加</span><i></i><i></i><i></i><span>多</span></div></section>
   <div id="cell-info" class="cell-info" hidden role="status"></div>
   <div id="error" class="error" role="alert" hidden></div>
 </main>
+<div id="inline-hint" class="inline-hint" role="status" aria-live="polite" hidden></div>
 </body></html>

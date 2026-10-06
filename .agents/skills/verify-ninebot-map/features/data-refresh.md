@@ -1,33 +1,29 @@
 # Refresh a running map
 
-A user keeps the map open while a local download updates the standard dataset; the page refreshes without losing their saved working state.
+A user keeps the map open while local data changes, or requests a public update through GitHub Actions. The page retains their working state.
 
 ## Sub-features
 
 - `valid-update` reads a new valid dataset through the running server.
-- `retain-controls` preserves dates, coordinates, names and view.
+- `retain-controls` preserves grid, saved names, selection, draft, theme and view.
 - `invalid-update` retains the previous valid dataset.
-- `manual-import` keeps a manually imported file in control of the page.
+- `public-update` waits for workflow success and newly collected data.
+- `shared-cooldown` displays the same activity hint for a server 429 and repeated clicks.
+- `update-failure` retains the map when dispatch is rejected or the service is unavailable.
+- `local-unavailable` disables the public update button on a local 404 without a page error.
 
-## How to get to it (user POV)
+## How to get to it
 
-- Open `./run map --dataset <file>` and replace that local file with valid standard data.
-- Return an already open page to the foreground after `./run cloud pull`.
-- Open `./run cloud map` to download and display the latest real archive when authorized.
+Open `./run map --dataset <file>`, replace that local file with standard data, and return the page to the foreground. A configured public site exposes its update button at the upper left.
 
 ## Driving it with Playwright
 
-Preconditions:
+Run `npm run verify:doctor`, then `npm run verify -- --suite refresh`. The harness owns a scratch dataset, local server and fresh browser context. It confirms GET summary and HEAD ETag, starts with one ride, saves a synthetic place name, and checks grid and view retention after replacing the dataset with two rides. An invalid replacement must preserve both rides.
 
-- `npm run verify:doctor` succeeds.
-- Let the harness create its scratch dataset and server; do not reuse a user map.
+The public-update checks mock the same-origin API contract while using the real local dataset server. An accepted request progresses through queued, running and succeeded. The page must wait for data collected after that request before reporting success. It then reads three rides while retaining selection, an unsaved label draft, grid, theme and view. A server 429 and subsequent clicks display “正在Riding中...” in the same hint as Running. Dispatch rejection and unavailable responses preserve the visible map.
 
-Run `npm run verify -- --suite refresh`. The harness verifies the loopback HTTP summary and ETag, starts with one ride, applies date and coordinate controls, saves a synthetic name, and atomically replaces its dataset with two rides. Bringing the page forward must show two history rides while retaining one filtered map ride, the dates, coordinates, name and view. It then replaces the file with invalid data and exercises manual import ownership.
-
-Read the refresh proof and before/after screenshots. Require process termination, closed socket and removed scratch data after cleanup while proof files still exist.
+Read `refresh.json` and the before/after screenshots. Require owned process termination, a closed socket and removed scratch data while evidence remains.
 
 ## Gotchas
 
-- This proves refresh after local file replacement; it does not prove a real cloud download.
-- Invalid data may be rejected by the server before reaching the browser.
-- A manually imported file stops automatic following until the page is reopened.
+API fixtures prove browser behavior against the stated contract. They do not prove real GitHub dispatch, a live ninebot session, or public rate-limit enforcement. Those entry points need separately authorized cloud evidence.

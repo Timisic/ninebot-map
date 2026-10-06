@@ -1,29 +1,29 @@
 ---
-name: 骑行地图
-description: 以路线为中心的本地骑行地图与可切换深浅色控件
+name: Along
+description: 以路线为中心的 Along 地图与跟随系统的外观
 colors:
-  panel: "#213237"
-  ink: "#eef6f3"
-  secondary: "#b1c5bf"
-  primary: "#8adbd1"
-  line: "#3d5559"
-  focus: "#9ae7de"
-  background: "#142126"
-  map-background: "#142126"
-  hover: "#30484a"
-  hover-line: "#688681"
-  active: "#365451"
-  selected: "#2d504e"
-  selection: "#75c8c3"
-  selection-ink: "#142b2a"
+  panel: "#2a2c2e"
+  ink: "#eceeed"
+  secondary: "#b6babb"
+  primary: "#d4dedc"
+  line: "#44484a"
+  focus: "#b4cbc8"
+  background: "#202123"
+  map-background: "#202123"
+  hover: "#343739"
+  hover-line: "#6c7375"
+  active: "#3b4042"
+  selected: "#3b4444"
+  selection: "#becdca"
+  selection-ink: "#202b2a"
   error-panel: "#472d2c"
   error-line: "#c78880"
   error-ink: "#ffe2dd"
   marker: "#b2efdf"
   marker-selected: "#f3fff9"
-  marker-fill: "#213237"
-  marker-shadow: "#10282b"
-  on-primary: "#142b2a"
+  marker-fill: "#2a2c2e"
+  marker-shadow: "#151718"
+  on-primary: "#202b2a"
   route: "#36b9bf"
   light-panel: "#ffffff"
   light-ink: "#203534"
@@ -99,7 +99,7 @@ rounded:
   control: "8px"
   notice: "9px"
   popover: "10px"
-  panel: "#213237"
+  panel: "#2a2c2e"
 spacing:
   compact: "8px"
   popover: "12px"
@@ -130,11 +130,13 @@ components:
     size: "44px"
 ---
 
-# 骑行地图界面
+# Along 地图界面
 
-桌面使用 64px 顶栏，700px 以下使用 56px。标题、主题和常去地点保留在顶栏。左上统计以当前地图为主、全部历史为次，日期按需展开，统计下显示数据更新时间。网页不提供导入或上传入口。右下统一全图、图层与 44px 缩放控件。“图层”仅含道路底图和经过次数两个开关，移除坐标菜单和数据隐私折叠块。左下只显示路线叠加图例。
+桌面使用 64px 顶栏，700px 以下使用 56px。左上显示 Riding ｜ Running，浏览器标题使用 Along。Running 仅显示“正在running中...”的小提示，提示锚定到按钮，不切换地图。右侧保留外观和常去地点。地图左上只显示更新按钮、最近一次成功采集的更新时间和必要的更新状态。左下将当前地图、全部历史的次数与里程合并到路线图例，全部使用现有图例的 11px 字阶，不新增框。网页不提供日期筛选、导入或上传入口。右下保留全图、图层与 44px 缩放控件。
 
-默认深色，浅色选择保存在浏览器。白色面板搭配浅灰绿地图；深色为低饱和蓝绿。字体使用系统中文无衬线字体。控件采用 9px 圆角，浮动工具组 12px，统计和弹层 14px。浮动工具使用柔和偏移阴影，停靠面板使用分隔线。地图自身建立层叠上下文，原生缩放按钮不能覆盖设置弹层。
+首次打开跟随系统。外观菜单允许浅色、深色和跟随系统，选择保存在浏览器。跟随系统时立即响应系统外观变化，手动选择不受系统变化影响。深色地图使用 #202123 石墨灰，面板使用 #2a2c2e，路线保留蓝绿色。浅色保持白色面板与浅灰绿地图。字体使用系统中文无衬线字体。控件采用 9px 圆角，浮动工具组 12px，弹层 14px。浮动工具使用柔和偏移阴影，停靠面板使用分隔线。地图自身建立层叠上下文，原生缩放按钮不能覆盖设置弹层。
+
+更新按钮复用公开站点的同源更新接口，浏览器不持有凭证。所有访客共用服务端 12 小时间隔。冷却期仍可点击，显示“正在Riding中...”，与 Running 共用同一个提示组件。排队和运行时显示小字状态；工作流成功后继续等待新数据，只有观察到该次请求之后的采集时间才显示“地图已更新”。失败保留当前地图。未配置接口的本地或静态页面禁用更新按钮，仅通过按钮提示说明原因。
 
 地点面板在宽屏占右侧 320px，中屏 290px；700px 以下停靠底部。地图尺寸同步调整，不被面板覆盖。560–700px 的底部面板把列表和地点详情并排显示。选中详情保留固定空间，命名由按钮进入，列表不会因选中缩成一行。重复选中保持状态，关闭面板保留选择和草稿。定位由明确按钮触发。
 

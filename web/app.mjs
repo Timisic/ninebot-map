@@ -4,7 +4,6 @@ import { icon } from './icons.mjs';
 import { installWheelZoom } from './wheel-zoom.mjs';
 const $ = id => document.getElementById(id);
 const launch = new URLSearchParams(location.hash.slice(1));
-if (launch.get('title')) { $('page-title').textContent = launch.get('title').slice(0, 40); document.title = $('page-title').textContent; }
 const map = L.map('map', { scrollWheelZoom: false, zoomControl: false, attributionControl: true, zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false, preferCanvas: true, minZoom: 3, maxZoom: 19, zoomSnap: 0, zoomDelta: 1 }).setView([0, 0], 13);
 map.attributionControl.setPrefix(false);
 L.control.zoom({ position: 'bottomright' }).addTo(map);
@@ -12,26 +11,33 @@ installWheelZoom(map);
 const routeLayer = createRouteLayer(map), markers = L.layerGroup().addTo(map);
 let state = { phase: 'idle', model: null, view: null, selected: null, editing: null, labels: {}, storageKey: null };
 let tiles = null, importVersion = 0;
-let serverRevision = null, refreshBusy = false;
-/** @typedef {'light' | 'dark'} Theme */
-/** @type {Theme} */
-let theme = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+let serverRevision = null, refreshBusy = false, refreshTimer = null;
+/** @typedef {'light' | 'dark' | 'system'} ThemePreference */
+/** @type {ThemePreference} */
+let themePreference = document.documentElement.dataset.themePreference || 'system';
+const systemTheme = matchMedia('(prefers-color-scheme: dark)');
+let theme;
 function applyTheme() {
+  theme = themePreference === 'system' ? systemTheme.matches ? 'dark' : 'light' : themePreference;
   document.documentElement.dataset.theme = theme;
-  const target = theme === 'dark' ? '浅色' : '深色';
-  $('theme-toggle').replaceChildren(icon(theme === 'dark' ? 'sun' : 'moon'));
-  $('theme-toggle').setAttribute('aria-label', `切换为${target}`);
-  $('theme-toggle').title = `切换为${target}`;
+  document.documentElement.dataset.themePreference = themePreference;
+  const label = { system: '跟随系统', light: '浅色', dark: '深色' }[themePreference];
+  $('theme-toggle').replaceChildren(icon(theme === 'dark' ? 'moon' : 'sun'));
+  $('theme-toggle').setAttribute('aria-label', `外观，${label}`);
+  $('theme-toggle').title = `外观，${label}`;
+  for (const button of document.querySelectorAll('button[data-theme-preference]')) button.setAttribute('aria-pressed', String(button.dataset.themePreference === themePreference));
   if (state.model && state.view) {
     const selected = state.view.destinations.find(place => place.id === state.selected);
     routeLayer.setView(state.model, state.view, $('show-grid').checked, selected ? new Set(selected.visibleMemberIds) : null, theme === 'light');
   }
 }
-$('theme-toggle').addEventListener('click', () => {
-  theme = theme === 'dark' ? 'light' : 'dark';
-  try { localStorage.setItem('ride-map-theme', theme); } catch {}
-  applyTheme();
+for (const button of document.querySelectorAll('button[data-theme-preference]')) button.addEventListener('click', () => {
+  themePreference = button.dataset.themePreference;
+  try { localStorage.setItem('ride-map-theme', themePreference); } catch {}
+  $('theme-options').open = false;
+  applyTheme(); $('theme-toggle').focus();
 });
+systemTheme.addEventListener('change', () => { if (themePreference === 'system') applyTheme(); });
 applyTheme();
 for (const element of document.querySelectorAll('.map-settings, .toolbar, #places-panel')) {
   L.DomEvent.disableClickPropagation(element);
@@ -40,7 +46,7 @@ for (const element of document.querySelectorAll('.map-settings, .toolbar, #place
 const km = value => value === null ? '里程不完整' : `${(value / 1000).toLocaleString('zh-CN', { maximumFractionDigits: 1 })} km`;
 function showError(message) { $('error').textContent = message; $('error').hidden = !message; }
 function setSidebar(open) {
-  if (open) { $('map-options').open = false; $('date-panel').open = false; }
+  if (open) $('map-options').open = false;
   $('workspace').classList.toggle('places-hidden', !open);
   $('toggle-places').setAttribute('aria-expanded', String(open));
   $('toggle-places').textContent = '常去地点';
@@ -50,14 +56,16 @@ setSidebar(false);
 $('map-options').addEventListener('toggle', () => { if ($('map-options').open) setSidebar(false); });
 window.addEventListener('keydown', event => {
   if (event.key !== 'Escape') return;
-  if ($('map-options').open || $('date-panel').open) { $('map-options').open = false; $('date-panel').open = false; }
+  if (!$('inline-hint').hidden) hideHint();
+  else if ($('theme-options').open) { $('theme-options').open = false; $('theme-toggle').focus(); }
+  else if ($('map-options').open) $('map-options').open = false;
   else { setSidebar(false); $('toggle-places').focus(); }
 });
-for (const summary of document.querySelectorAll('#date-panel>summary, #map-options>summary, .place-method>summary')) summary.append(icon('chevron-down'));
+for (const summary of document.querySelectorAll('#map-options>summary, .place-method>summary')) summary.append(icon('chevron-down'));
 function stopTiles() {
   if (tiles) { map.removeLayer(tiles); tiles.off(); tiles = null; }
   map.setMaxZoom(19);
-  $('basemap').checked = false; $('map').classList.remove('online-basemap'); render(); $('local-status').textContent = '骑行记录';
+  $('basemap').checked = false; $('map').classList.remove('online-basemap'); render(); $('local-status').textContent = '路线已就绪';
 }
 function fit() {
   if (!state.view?.tracks.length) return;
@@ -102,7 +110,7 @@ function render() {
   $('places').scrollTop = listScroll;
   if (focusPlace) [...document.querySelectorAll(focusMarker ? '.destination-marker button' : '.place-button')].find(button => button.dataset.placeId === focusPlace)?.focus({ preventScroll: true });
   $('places-empty').hidden = view.destinations.length > 0;
-  $('places-empty').textContent = model.totals.map_ride_count ? '当前日期没有可显示的行程终点。' : '数据中没有符合范围的采样轨迹。';
+  $('places-empty').textContent = '数据中没有符合范围的行程终点。';
   $('selection-summary').hidden = !selectedPlace || state.editing === state.selected;
   $('selection-empty').hidden = !!selectedPlace;
   $('label-form').hidden = !selectedPlace || state.editing !== state.selected;
@@ -112,13 +120,7 @@ function render() {
     $('place-label').setAttribute('aria-label', `为${selectedPlace.defaultLabel}命名`);
   }
   $('empty').hidden = view.rideCount > 0;
-  if (!view.rideCount) { $('empty-title').textContent = model.totals.map_ride_count ? '这段日期暂无轨迹' : '历史已保留，暂无地图轨迹'; $('empty-description').textContent = model.totals.map_ride_count ? '调整日期，或选择全部日期查看当前采样轨迹。' : '缺失、单点与简化轨迹不连线。等待后续可用采样轨迹。';  }
-
-}
-function filter() {
-  if (!state.model) return;
-  try { const view = state.model.select({ from: $('from').value, to: $('to').value }); state = { ...state, view }; showError(''); render(); }
-  catch (error) { showError(`${error.message}。保留上一有效范围。`); }
+  if (!view.rideCount) { $('empty-title').textContent = '历史已保留，暂无地图轨迹'; $('empty-description').textContent = '缺失、单点与简化轨迹不连线。等待后续可用采样轨迹。'; }
 }
 async function hashText(text) {
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
@@ -138,7 +140,8 @@ async function loadLabels(model) {
   } catch { $('label-note').textContent = '本地存储不可用，名称仅保留到关闭页面。'; }
   return { storageKey, legacyStorageKey: keys[1], labels };
 }
-async function loadDataset(text, range = { from: '', to: '' }, fitView = true) {
+async function loadDataset(text, fitView = true) {
+  if (state.phase === 'closed') return;
   const version = ++importVersion;
   state = { ...state, phase: 'loading' }; $('local-status').textContent = '正在读取…'; showError('');
   await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
@@ -146,11 +149,10 @@ async function loadDataset(text, range = { from: '', to: '' }, fitView = true) {
     const model = readRideMap(text, 'unverified');
     const saved = await loadLabels(model);
     if (version !== importVersion) return;
-    stopTiles(); state = { phase: 'ready', model, view: model.select(range), selected: null, editing: null, ...saved };
-    for (const id of ['from', 'to', 'clear-dates', 'show-grid', 'basemap', 'fit']) $(id).disabled = false;
-    for (const id of ['from', 'to']) { $(id).value = range[id] || ''; $(id).min = model.dateBounds[0]; $(id).max = model.dateBounds[1]; }
+    stopTiles(); state = { phase: 'ready', model, view: model.select(), selected: null, editing: null, ...saved };
+    for (const id of ['show-grid', 'basemap', 'fit']) $(id).disabled = false;
     $('updated-at').textContent = '更新于 ' + new Intl.DateTimeFormat('zh-CN', { timeZone: model.timezone, dateStyle: 'short', timeStyle: 'short' }).format(new Date(model.updatedAt));
-    render(); if (fitView) fit();
+    render(); renderUpdate(); if (fitView) fit();
     return true;
   } catch (error) {
     if (version !== importVersion) return;
@@ -160,8 +162,6 @@ async function loadDataset(text, range = { from: '', to: '' }, fitView = true) {
 }
 $('fit').addEventListener('click', fit);
 $('toggle-places').addEventListener('click', () => setSidebar($('toggle-places').getAttribute('aria-expanded') !== 'true'));
-for (const id of ['from', 'to']) $(id).addEventListener('change', filter);
-$('clear-dates').addEventListener('click', () => { $('from').value = ''; $('to').value = ''; filter(); });
 $('show-grid').addEventListener('change', () => { $('cell-info').hidden = true; render(); });
 $('clear-selection').addEventListener('click', () => { state.selected = null; state.editing = null; render(); });
 $('close-places').addEventListener('click', () => { setSidebar(false); $('toggle-places').focus(); });
@@ -202,8 +202,88 @@ function showCell(event) {
   $('cell-info').hidden = false; $('cell-info').replaceChildren(Object.assign(document.createElement('strong'), {textContent: count}), '次行程经过这个区域');
 }
 map.on('mousemove click', showCell); map.on('mouseout', () => { $('cell-info').hidden = true; });
+
+/** @typedef {'idle' | 'queued' | 'running' | 'succeeded' | 'failed' | 'unknown' | 'unavailable'} UpdatePhase */
+/** @typedef {{ phase: UpdatePhase, canRequest: boolean, requestedAt: string | null, nextAllowedAt: string | null, request: 'idle' | 'reading' | 'dispatching', timer: number | null }} UpdateState */
+/** @type {UpdateState} */
+let updateState = { phase: 'unavailable', canRequest: false, requestedAt: null, nextAllowedAt: null, request: 'idle', timer: null };
+let hintTimer;
+function hideHint() { clearTimeout(hintTimer); $('inline-hint').hidden = true; }
+function showHint(anchor, message) {
+  hideHint();
+  const hint = $('inline-hint'); hint.textContent = message; hint.hidden = false;
+  const box = anchor.getBoundingClientRect();
+  hint.style.top = `${box.bottom + 6}px`;
+  hint.style.left = `${Math.max(12, Math.min(box.left, innerWidth - hint.offsetWidth - 12))}px`;
+  hintTimer = setTimeout(hideHint, 3500);
+}
+$('running').addEventListener('click', () => showHint($('running'), '正在running中...'));
+window.addEventListener('resize', hideHint);
+function updatedDatasetObserved() {
+  return !!state.model && !!updateState.requestedAt && new Date(state.model.updatedAt) >= new Date(updateState.requestedAt);
+}
+function renderUpdate() {
+  const button = $('update-map');
+  button.disabled = updateState.phase === 'unavailable' || updateState.request === 'dispatching';
+  button.textContent = updateState.request === 'dispatching' ? '提交中' : '更新';
+  button.title = updateState.phase === 'unavailable' ? '当前站点暂不支持在线更新。' : '获取最新骑行数据，所有访客共用 12 小时间隔。';
+  const text = {
+    idle: '', queued: '等待更新', running: '更新中', unknown: '正在确认更新状态', unavailable: '', failed: '更新未完成，请稍后重试。',
+    succeeded: updatedDatasetObserved() ? '地图已更新' : '等待地图更新'
+  }[updateState.phase];
+  $('update-status').textContent = text; $('update-status').hidden = !text;
+}
+function parseUpdate(value) {
+  const phases = ['idle', 'queued', 'running', 'succeeded', 'failed', 'unknown', 'unavailable'];
+  const validTime = time => time === null || typeof time === 'string' && Number.isFinite(Date.parse(time));
+  if (!value || !phases.includes(value.phase) || typeof value.can_request !== 'boolean' || !validTime(value.requested_at) || !validTime(value.next_allowed_at)) throw new Error('Invalid update status');
+  return { phase: value.phase, canRequest: value.can_request, requestedAt: value.requested_at, nextAllowedAt: value.next_allowed_at };
+}
+function scheduleUpdateStatus() {
+  clearTimeout(updateState.timer);
+  if (state.phase === 'closed') return;
+  const pending = ['queued', 'running', 'unknown'].includes(updateState.phase) || updateState.phase === 'succeeded' && !updatedDatasetObserved();
+  updateState.timer = pending ? setTimeout(async () => {
+    if (!document.hidden) { await readUpdateStatus(); await refreshServer(); renderUpdate(); }
+    scheduleUpdateStatus();
+  }, 5000) : null;
+}
+async function readUpdateStatus() {
+  if (updateState.request !== 'idle' || state.phase === 'closed') return;
+  updateState.request = 'reading';
+  try {
+    const response = await fetch('./api/update', { cache: 'no-store', signal: AbortSignal.timeout(10000) });
+    if (response.status === 404) updateState = { ...updateState, phase: 'unavailable', canRequest: false };
+    else {
+      const status = parseUpdate(await response.json());
+      updateState = { ...updateState, ...status };
+    }
+  } catch {
+    updateState = { ...updateState, phase: updateState.phase === 'unavailable' ? 'unavailable' : 'unknown', canRequest: false };
+  } finally { updateState.request = 'idle'; renderUpdate(); scheduleUpdateStatus(); }
+}
+$('update-map').addEventListener('click', async () => {
+  if (updateState.request !== 'idle') return;
+  if (!updateState.canRequest && updateState.nextAllowedAt && Date.parse(updateState.nextAllowedAt) <= Date.now()) await readUpdateStatus();
+  if (!updateState.canRequest) { showHint($('update-map'), '正在Riding中...'); return; }
+  updateState.request = 'dispatching'; renderUpdate();
+  try {
+    const response = await fetch('./api/update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}', signal: AbortSignal.timeout(10000) });
+    if (response.status === 403) {
+      showHint($('update-map'), '更新请求被拒绝，请刷新页面后重试。');
+      updateState = { ...updateState, phase: 'unavailable', canRequest: false };
+    } else {
+      updateState = { ...updateState, ...parseUpdate(await response.json()) };
+      if (response.status === 429) showHint($('update-map'), '正在Riding中...');
+      else if (response.status === 503) showHint($('update-map'), '更新服务暂不可用，请稍后重试。');
+      else if (response.status === 502) showHint($('update-map'), '更新未能开始，请稍后重试。');
+    }
+  } catch { updateState = { ...updateState, phase: 'unknown', canRequest: false }; }
+  finally { updateState.request = 'idle'; renderUpdate(); scheduleUpdateStatus(); }
+});
+
 const observer = new ResizeObserver(() => map.invalidateSize({ animate: false })); observer.observe($('map'));
-window.addEventListener('pagehide', () => { clearInterval(refreshTimer); observer.disconnect(); stopTiles(); routeLayer.remove(); map.remove(); }, { once: true });
+window.addEventListener('pagehide', () => { state.phase = 'closed'; importVersion++; clearInterval(refreshTimer); clearTimeout(updateState.timer); clearTimeout(hintTimer); observer.disconnect(); if (tiles) { map.removeLayer(tiles); tiles.off(); } routeLayer.remove(); map.remove(); }, { once: true });
 try {
   const response = await fetch('./dataset.json', { cache: 'no-store' });
   if (response.ok) {
@@ -214,9 +294,10 @@ try {
   }
   else if (response.status !== 404) showError('地图数据暂不可用，请稍后刷新。');
 } catch { showError('地图服务暂时无法连接，请稍后刷新。'); }
+await readUpdateStatus();
 
 async function refreshServer() {
-  if (refreshBusy || document.hidden || state.phase === 'loading') return;
+  if (refreshBusy || document.hidden || ['loading', 'closed'].includes(state.phase)) return;
   refreshBusy = true;
   const requestVersion = importVersion;
   try {
@@ -229,19 +310,19 @@ async function refreshServer() {
     if (nextRevision === serverRevision) return;
     if (!response.ok || state.phase === 'loading' || requestVersion !== importVersion) return;
     const wasOnline = $('basemap').checked;
-    const range = { from: $('from').value, to: $('to').value };
     const selection = { selected: state.selected, editing: state.editing, draft: $('place-label').value, datasetId: state.model?.datasetId };
-    if (await loadDataset(text, range, false)) {
+    if (await loadDataset(text, false)) {
       if (state.model.datasetId === selection.datasetId && state.view.destinations.some(place => place.id === selection.selected)) {
         state.selected = selection.selected; state.editing = selection.editing; $('place-label').value = selection.draft; render();
       }
       serverRevision = nextRevision;
       if (wasOnline && state.model) { $('basemap').checked = true; updateBasemap(); }
-      $('local-status').textContent = '数据已更新';
+      $('local-status').textContent = '数据已更新'; renderUpdate();
     }
   } catch { /* A temporary offline server leaves the visible map intact. */ }
   finally { refreshBusy = false; }
 }
-const refreshTimer = setInterval(refreshServer, 60000);
+if (state.phase !== 'closed') refreshTimer = setInterval(refreshServer, 60000);
 window.addEventListener('focus', refreshServer);
-document.addEventListener('visibilitychange', () => { if (!document.hidden) refreshServer(); });
+window.addEventListener('focus', readUpdateStatus);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { refreshServer(); readUpdateStatus(); } });

@@ -31,6 +31,10 @@ try{
  await page.goto(origin+'/map/');
  await page.waitForFunction(()=>document.querySelector('#visible-stat').textContent.includes('12 次'));
  assert.equal(await page.locator('input[type=file],#import-button,#empty-import').count(),0);
+ assert.equal(await page.title(),'Along');
+ assert.equal(await page.locator('#date-panel,#from,#to').count(),0);
+ await page.waitForFunction(()=>document.querySelector('#update-map').disabled&&document.querySelector('#update-map').title.includes('暂不支持'));
+ assert.equal(await page.locator('#error').isVisible(),false);
  assert.match(await page.locator('#updated-at').textContent(),/2026/);
  await page.locator('#toggle-places').click();await page.locator('.place-button').first().click();
  await page.locator('#edit-place').click();await page.locator('#place-label').fill('静态地图名称');await page.locator('#label-form button[type=submit]').click();
