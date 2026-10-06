@@ -1,4 +1,5 @@
 name: Private ride sync
+run-name: ${{ inputs.public_request_id && format('Along public {0}', inputs.public_request_id) || 'Private ride sync' }}
 on:
   schedule:
     - cron: '17 2 * * *'
@@ -12,6 +13,11 @@ on:
         description: Republish the saved successful archive without collection or clock reset
         type: boolean
         default: false
+      public_request_id:
+        description: Origin-generated request UUID for public update correlation
+        type: string
+        required: false
+        default: ''
 permissions:
   contents: write
 concurrency:
@@ -37,6 +43,7 @@ jobs:
           CLOUD_STATE_KEY: ${{ secrets.CLOUD_STATE_KEY }}
           SYNC_FORCE: ${{ inputs.force }}
           SYNC_PUBLISH_ONLY: ${{ inputs.publish_only }}
+          SYNC_PUBLIC_REQUEST_ID: ${{ inputs.public_request_id }}
         run: .venv/bin/python -m nbmap.cloud gate
   sync:
     needs: due
@@ -63,4 +70,5 @@ jobs:
           MAP_DEPLOY_KEY: ${{ secrets.MAP_DEPLOY_KEY }}
           SYNC_FORCE: ${{ inputs.force }}
           SYNC_PUBLISH_ONLY: ${{ inputs.publish_only }}
+          SYNC_PUBLIC_REQUEST_ID: ${{ inputs.public_request_id }}
         run: .venv/bin/python -m nbmap.cloud worker

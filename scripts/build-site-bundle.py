@@ -20,13 +20,14 @@ if args.output.exists():
     raise SystemExit('Output must be a new directory.')
 args.output.mkdir(parents=True, mode=0o700)
 export_site(json.loads(args.dataset.read_text()), args.output / 'public')
-code_files = ['nbmap/__init__.py', 'nbmap/public_map.py', 'nbmap/map_server.py', 'nbmap/dataset.py', 'nbmap/storage.py',
+code_files = ['nbmap/__init__.py', 'nbmap/public_map.py', 'nbmap/public_updates.py', 'nbmap/map_server.py', 'nbmap/dataset.py', 'nbmap/storage.py',
               'scripts/serve-public-map.py', 'scripts/receive-public-map.py']
 for relative in code_files:
     target = args.output / 'code' / relative
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(ROOT / relative, target)
 shutil.copyfile(ROOT / 'templates/map-site.service', args.output / 'map-site.service')
+shutil.copyfile(ROOT / 'templates/map-update.json', args.output / 'map-update.example.json')
 manifest = {'schema_version': 1, 'files': {}}
 for path in sorted(args.output.rglob('*')):
     if path.is_file():
