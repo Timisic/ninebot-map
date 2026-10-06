@@ -1,4 +1,3 @@
-"""One allowlisted viewer snapshot for local serving and public export."""
 import hashlib
 import re
 from dataclasses import dataclass
