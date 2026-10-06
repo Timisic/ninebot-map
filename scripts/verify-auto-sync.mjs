@@ -43,7 +43,7 @@ const datasetPath = path.join(directory, 'dataset.json');
 const old = makeDataset([{ id: 'old', xy: [[0, 0], [100, 0], [200, 0]], date: '2026-01-10' }]);
 const fresh = makeDataset([
   { id: 'old', xy: [[0, 0], [100, 0], [200, 0]], date: '2026-01-10' },
-  { id: 'new', xy: [[0, 0], [100, 0], [200, 0]], date: '2026-01-11' },
+  { id: 'z-new', xy: [[0, 0], [100, 0], [200, 0]], date: '2026-01-11' },
 ]);
 async function replace(value) {
   await fs.writeFile(datasetPath + '.writing', JSON.stringify(value));
@@ -90,6 +90,13 @@ try {
   await page.locator('.place-button').first().click();
   await page.locator('#edit-place').click(); await page.locator('#place-label').fill('Synthetic saved label');
   await page.locator('#label-form button[type=submit]').click();
+  await page.locator('.place-button').first().click();
+  await page.locator('#edit-place').click();
+  await page.locator('#place-label').fill('Same-dataset unsaved draft');
+  const cueId = await page.locator('.place-button[aria-pressed=true]').getAttribute('data-place-id');
+  const cueSelector = `.destination-marker.is-cued button[data-place-id="${cueId}"]`;
+  const cueDeadline = Number(await page.locator(cueSelector).getAttribute('data-cue-expires-at'));
+  const cueDelay = await page.locator(cueSelector).evaluate(element => parseFloat(getComputedStyle(element, '::after').animationDelay));
   const view = await page.locator('.leaflet-map-pane').getAttribute('style');
   await record('Set grid, saved label and preserve view', { grid: true, label: 'Synthetic saved label', view });
   await replace(fresh);
@@ -100,9 +107,18 @@ try {
   assert.match(await page.locator('#visible-stat').textContent(), /2 次/);
   assert.equal(await page.locator('#show-grid').isChecked(), true);
   assert.equal(await page.locator('.place-name').first().textContent(), 'Synthetic saved label');
+  assert.equal(await page.locator('#place-label').inputValue(), 'Same-dataset unsaved draft');
+  assert.equal(await page.locator('.place-button[aria-pressed=true]').getAttribute('data-place-id'), cueId);
+  assert.equal(Number(await page.locator(cueSelector).getAttribute('data-cue-expires-at')), cueDeadline, 'A same-dataset refresh must retain the original cue through provisional selection clearing.');
+  assert.ok(await page.locator(cueSelector).evaluate(element => parseFloat(getComputedStyle(element, '::after').animationDelay)) < cueDelay, 'Rebuilt markers must continue the original animation phase.');
   assert.equal(await page.locator('.leaflet-map-pane').getAttribute('style'), view);
   if (evidence) await page.screenshot({ path: path.join(evidence, 'after.png') });
   await record('Browser refreshed and retained preferences', { history: await page.locator('#history-stat').textContent(), visible: await page.locator('#visible-stat').textContent(), view: await page.locator('.leaflet-map-pane').getAttribute('style') });
+  await page.waitForFunction(() => !document.querySelector('.destination-marker.is-cued'), null, { timeout: 3500 });
+  assert.equal(await page.locator('.place-button[aria-pressed=true]').getAttribute('data-place-id'), cueId);
+  assert.equal(await page.locator('#place-label').inputValue(), 'Same-dataset unsaved draft');
+  assert.equal(await page.locator('.leaflet-map-pane').getAttribute('style'), view);
+  await record('Cue survives same-dataset refresh and editing, then expires without moving the map or losing selection', { cueId, cueDeadline });
   await replace({ invalid: true });
   assert.equal((await doctor(url, fresh)).etag, freshSnapshot.etag);
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
@@ -110,6 +126,21 @@ try {
   assert.equal(await page.locator('input[type=file], #import-button').count(), 0);
   assert.equal(await page.locator('#update-map').isDisabled(), true);
   assert.match(await page.locator('#update-map').getAttribute('title'), /暂不支持/);
+
+  await page.locator('.place-button').first().click();
+  await replace(makeDataset([{ id: 'away', xy: [[3000, 3000], [3200, 3200]], date: '2026-01-12' }]));
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await page.waitForFunction(() => document.querySelector('#visible-stat').textContent.includes('1 次'));
+  assert.equal(await page.locator('.destination-marker.is-cued, .place-button[aria-pressed=true]').count(), 0);
+  await replace(fresh);
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await page.waitForFunction(() => document.querySelector('#visible-stat').textContent.includes('2 次'));
+  await page.locator('.place-button').first().click();
+  await replace({ ...fresh, dataset_id: 'synthetic-other-map' });
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await page.waitForFunction(() => !document.querySelector('.place-button[aria-pressed=true]'));
+  assert.equal(await page.locator('.destination-marker.is-cued').count(), 0);
+  await record('Removed destination and changed dataset clear selection and cue', { missingPointCleared: true, changedDatasetCleared: true });
 
   let updateStatus = { phase: 'idle', can_request: true, requested_at: null, next_allowed_at: null };
   let responseCode = 202, postCount = 0;
@@ -160,12 +191,16 @@ try {
   assert.match(await page.locator('#visible-stat').textContent(), /2 次/);
   const published = makeDataset([
     { id: 'old', xy: [[0, 0], [100, 0], [200, 0]], date: '2026-01-10' },
-    { id: 'new', xy: [[0, 0], [100, 0], [200, 0]], date: '2026-01-11' },
+    { id: 'z-new', xy: [[0, 0], [100, 0], [200, 0]], date: '2026-01-11' },
     { id: 'published', xy: [[0, 0], [100, 0], [200, 0]], date: '2026-01-12' },
   ]);
   published.updated_at = '2026-10-06T00:01:00Z';
   await replace(published);
   await page.waitForFunction(() => document.querySelector('#update-status').textContent === '地图已更新');
+  assert.equal(await page.locator('#update-status').evaluate(element => getComputedStyle(element).clipPath), 'inset(50%)', 'Success remains available to assistive technology without a duplicate visible line.');
+  assert.equal(await page.locator('#updated-at').getAttribute('datetime'), published.updated_at);
+  assert.match(await page.locator('#updated-at').getAttribute('title'), /2026/);
+  assert.doesNotMatch(await page.locator('#updated-at').textContent(), /2026/);
   assert.match(await page.locator('#visible-stat').textContent(), /3 次/);
   assert.equal(await page.locator('#place-label').inputValue(), 'Synthetic unsaved draft');
   assert.equal(await page.locator('.place-button[aria-pressed=true]').getAttribute('data-place-id'), selectedId);

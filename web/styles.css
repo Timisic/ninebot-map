@@ -1,4 +1,5 @@
-:root { font: 14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; font-variant-numeric: tabular-nums; color: var(--ink); background: var(--background); --radius: 14px; --sidebar: 320px; --dock: min(340px,46dvh); }
+@font-face { font-family: "Smiley Sans"; src: url('./fonts/smiley-sans/SmileySans-Oblique.woff2') format('woff2'); font-style: normal; font-weight: 400; font-display: swap; }
+:root { font: 14px/1.5 "Smiley Sans",-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; font-synthesis: none; font-variant-numeric: tabular-nums; color: var(--ink); background: var(--background); --radius: 14px; --sidebar: 320px; --dock: min(340px,46dvh); }
 [data-theme=light] { color-scheme: light; --background: #f4f7f6; --map-background: #edf2ef; --panel: #ffffff; --ink: #203534; --secondary: #596e6a; --primary: #136c70; --line: #dbe5e1; --focus: #117f85; --hover: #eef4f2; --hover-line: #a9c2bb; --active: #dfede8; --selected: #e4f1ed; --selection: #c7e7de; --selection-ink: #173e35; --on-primary: #ffffff; --error-panel: #fff0ed; --error-line: #cf9184; --error-ink: #783626; --marker: #076974; --marker-selected: #063e47; --marker-fill: #ffffff; --marker-shadow: #ffffff; --route: #167e87; --route-strong: #053d48; --shadow: 0 5px 24px rgb(0 0 0 / .08); }
 [data-theme=dark] { color-scheme: dark; --background: #202123; --map-background: #202123; --panel: #2a2c2e; --ink: #eceeed; --secondary: #b6babb; --primary: #d4dedc; --line: #44484a; --focus: #b4cbc8; --hover: #343739; --hover-line: #6c7375; --active: #3b4042; --selected: #3b4444; --selection: #becdca; --selection-ink: #202b2a; --on-primary: #202b2a; --error-panel: #472d2c; --error-line: #c78880; --error-ink: #ffe2dd; --marker: #b2efdf; --marker-selected: #f3fff9; --marker-fill: #2a2c2e; --marker-shadow: #151718; --route: #36b9bf; --route-strong: #dcffff; --shadow: 0 5px 24px rgb(0 0 0 / .2); }
 * { box-sizing: border-box; scrollbar-color: var(--line) var(--panel); }
@@ -17,7 +18,7 @@ input[type=checkbox] { width: 18px; height: 18px; min-height: 18px; margin: 0; a
 summary { cursor: pointer; list-style: none; }
 summary::-webkit-details-marker { display: none; }
 summary:hover { color: var(--ink); }
-summary svg { margin-left: auto; }
+summary .lucide-chevron-down { margin-left: auto; }
 details[open]>summary .lucide-chevron-down { transform: rotate(180deg); }
 svg.lucide { width: 16px; height: 16px; flex-shrink: 0; }
 ::selection { background: var(--selection); color: var(--selection-ink); }
@@ -47,9 +48,10 @@ h2 { font-size: 16px; font-weight: 600; }
 .places-hidden #map { right: 0; }
 .leaflet-container { font: inherit; }
 .route-canvas { pointer-events: none; position: absolute; }
-.toolbar { position: absolute; top: 16px; left: 24px; z-index: 500; display: flex; align-items: center; gap: 12px; max-width: calc(100% - var(--sidebar) - 48px); }
+.toolbar { position: absolute; top: 16px; left: 24px; z-index: 500; display: flex; align-items: center; gap: 8px; max-width: calc(100% - var(--sidebar) - 48px); }
 .places-hidden .toolbar { max-width: calc(100% - 48px); }
-#update-map { min-width: 56px; box-shadow: var(--shadow); border: 0; font-size: 12px; }
+#update-map { display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; padding: 8px 4px; border: 0; background: transparent; color: var(--secondary); font-size: 12px; }
+#update-map:hover:not(:disabled) { color: var(--ink); background: var(--hover); }
 .update-meta { min-width: 0; display: flex; flex-direction: column; gap: 2px; color: var(--secondary); font-size: 11px; }
 #update-status { color: var(--ink); }
 .metrics { display: flex; flex-direction: column; gap: 3px; color: var(--secondary); font-size: 11px; }
@@ -92,7 +94,7 @@ h2 { font-size: 16px; font-weight: 600; }
 .place-method p { margin-bottom: 16px; line-height: 1.7; max-height: 96px; overflow: auto; }
 .map-settings { position: absolute; z-index: 650; right: calc(var(--sidebar) + 20px); bottom: 30px; display: flex; align-items: stretch; background: var(--panel); box-shadow: var(--shadow); border-radius: 12px; }
 .places-hidden .map-settings { right: 20px; }
-#fit { border: 0; background: transparent; border-radius: 12px 0 0 12px; min-width: 56px; }
+#fit { display: grid; place-items: center; border: 0; background: transparent; border-radius: 12px 0 0 12px; width: 44px; padding: 0; }
 #map-options { border-left: 1px solid var(--line); }
 #map-options>summary { display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 12px; }
 .settings-content { position: absolute; bottom: calc(100% + 10px); right: 0; width: 300px; max-height: min(530px,calc(100dvh - 210px)); overflow: auto; padding: 20px; background: var(--panel); box-shadow: var(--shadow); border-radius: var(--radius); }
@@ -106,15 +108,20 @@ h2 { font-size: 16px; font-weight: 600; }
 .leaflet-right .leaflet-control { margin-right: 20px; }
 .leaflet-bottom .leaflet-control-zoom { margin-bottom: 88px; }
 .leaflet-control-zoom { border: 0!important; box-shadow: var(--shadow)!important; border-radius: 12px!important; overflow: hidden; }
-.leaflet-control-zoom a { width: 44px!important; height: 44px!important; line-height: 44px!important; background: var(--panel)!important; color: var(--ink)!important; border-color: var(--line)!important; font-size: 21px!important; font-weight: 400!important; }
+.leaflet-control-zoom a { display: grid!important; place-items: center; width: 44px!important; height: 44px!important; background: var(--panel)!important; color: var(--ink)!important; border-color: var(--line)!important; }
+.leaflet-control-zoom a svg,#fit svg { width: 18px; height: 18px; }
 .leaflet-control-attribution { color: var(--secondary)!important; background: var(--panel)!important; }
 .leaflet-control-attribution a { color: var(--secondary)!important; }
 [data-theme=dark] .basemap-tiles { filter: invert(1) hue-rotate(180deg); }
 [data-theme=light] .basemap-tiles { filter: none; }
 .destination-marker { background: transparent; border: 0; }
-.destination-marker button { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--marker); }
-.destination-marker button svg { width: 17px; height: 17px; stroke-width: 2.4; filter: drop-shadow(0 1px 1px var(--marker-shadow)); fill: var(--marker-fill); }
-.destination-marker button[aria-pressed=true] svg { width: 19px; height: 19px; color: var(--marker-selected); }
+.destination-marker button { position: relative; display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--marker); }
+.destination-marker button svg { position: relative; width: 17px; height: 17px; stroke-width: 2; filter: drop-shadow(0 1px 1px var(--marker-shadow)); fill: var(--marker-fill); }
+.destination-marker button[aria-pressed=true]::before { content: ''; position: absolute; width: 34px; height: 34px; border: 1px solid #174b4e; border-radius: 50%; background: #eaf5ef; }
+.destination-marker button[aria-pressed=true] svg { width: 19px; height: 19px; color: #174b4e; fill: #eaf5ef; filter: none; }
+.destination-marker.is-cued button::after { content: ''; position: absolute; z-index: -1; width: 60px; height: 60px; border-radius: 50%; background: #eaf5ef; opacity: .6; animation: place-cue 3000ms ease-out both; animation-delay: var(--cue-elapsed); pointer-events: none; }
+.place-cue-name { position: absolute; bottom: 43px; left: 50%; transform: translateX(-50%); width: max-content; max-width: min(180px,calc(100vw - 32px)); padding: 3px 8px; border-radius: 6px; background: #eaf5ef; color: #174b4e; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
+@keyframes place-cue { 0% { transform: scale(.68); opacity: .7; } 20% { transform: scale(1); opacity: .6; } 100% { transform: scale(1.12); opacity: .3; } }
 .destination-marker button:hover { background: var(--selected); }
 .empty-state { position: absolute; z-index: 510; left: calc((100% - var(--sidebar))/2); top: 45%; transform: translate(-50%,-50%); width: 360px; max-width: 80%; padding: 28px; border-radius: var(--radius); background: var(--panel); box-shadow: var(--shadow); text-align: center; }
 .places-hidden .empty-state { left: 50%; }

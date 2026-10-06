@@ -47,6 +47,14 @@ class MapServerTests(unittest.TestCase):
         self.assertEqual(json.loads(body)['summary']['ride_count'], 12)
         self.assertEqual(self.server.server_address[0], '127.0.0.1')
 
+    def test_local_font_and_license_have_correct_types_and_bytes(self):
+        for filename, content_type in [('fonts/smiley-sans/SmileySans-Oblique.woff2', 'font/woff2'),
+                                       ('fonts/smiley-sans/LICENSE', 'text/plain; charset=utf-8')]:
+            status, headers, body = self.request('/' + filename)
+            self.assertEqual(status, 200)
+            self.assertEqual(headers['Content-Type'], content_type)
+            self.assertEqual(body, (WEB_ROOT / filename).read_bytes())
+
     def test_only_literal_allowed_routes_are_served(self):
         for path in ['/.private/tokens.json', '/tokens.json', '/data/', '/../README.md', '/%2e%2e/.private/tokens.json', '//dataset.json', '/dataset.json?x=1', '/web/app.mjs', '/vendor/leaflet/../../README.md']:
             self.assertEqual(self.request(path)[0], 404, path)

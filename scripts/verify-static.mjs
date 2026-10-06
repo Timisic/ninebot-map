@@ -18,7 +18,7 @@ const retainedAssets=path.join(scratch,'assets');
 await fs.cp(path.join(oldSite,'assets'),retainedAssets,{recursive:true});
 await fs.cp(path.join(site,'assets'),retainedAssets,{recursive:true});
 let activeSite=site,longCache=false;
-const types={'.html':'text/html','.mjs':'text/javascript','.js':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png'};
+const types={'.html':'text/html','.mjs':'text/javascript','.js':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.woff2':'font/woff2'};
 const requests=[];
 const server=createServer(async(req,res)=>{
  requests.push({method:req.method,path:req.url});
@@ -42,7 +42,16 @@ try{
  assert.equal(await page.locator('#date-panel,#from,#to').count(),0);
  await page.waitForFunction(()=>document.querySelector('#update-map').disabled&&document.querySelector('#update-map').title.includes('暂不支持'));
  assert.equal(await page.locator('#error').isVisible(),false);
- assert.match(await page.locator('#updated-at').textContent(),/2026/);
+ assert.doesNotMatch(await page.locator('#updated-at').textContent(),/2026/);
+ assert.match(await page.locator('#updated-at').getAttribute('title'),/2026/);
+ const loadedFont=await page.evaluate(async()=>{await document.fonts.load('400 14px "Smiley Sans"');await document.fonts.ready;return [...document.fonts].some(face=>face.family.includes('Smiley Sans')&&face.status==='loaded');});
+ assert.equal(loadedFont,true);
+ const assetBase=(await page.locator('link[href$="styles.css"]').getAttribute('href')).replace('styles.css','');
+ const fontURL=new URL(assetBase+'fonts/smiley-sans/SmileySans-Oblique.woff2',page.url());
+ assert.ok(requests.some(request=>request.path===fontURL.pathname),'The font must load relative to versioned CSS under the nested map path.');
+ const fontResponse=await fetch(fontURL);assert.equal(fontResponse.headers.get('content-type'),'font/woff2');
+ assert.deepEqual(Buffer.from(await fontResponse.arrayBuffer()),await fs.readFile(path.join(root,'web/fonts/smiley-sans/SmileySans-Oblique.woff2')));
+ const licenseResponse=await fetch(new URL(assetBase+'fonts/smiley-sans/LICENSE',page.url()));assert.equal(licenseResponse.status,200);assert.match(await licenseResponse.text(),/SIL OPEN FONT LICENSE/);
  await page.locator('#toggle-places').click();await page.locator('.place-button').first().click();
  await page.locator('#edit-place').click();await page.locator('#place-label').fill('静态地图名称');await page.locator('#label-form button[type=submit]').click();
  await page.screenshot({path:path.join(output,'static-before.png')});

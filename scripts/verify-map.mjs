@@ -11,6 +11,27 @@ async function selectTheme(page, preference) {
   await page.locator(`button[data-theme-preference=${preference}]`).click();
 }
 async function toggleTheme(page) { await selectTheme(page, await page.locator('html').getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); }
+async function themeGeometry(page, width) {
+  await page.setViewportSize({ width, height: 960 });
+  const measurements = [];
+  for (const preference of ['system', 'light', 'dark']) {
+    await selectTheme(page, preference);
+    await page.locator('#theme-toggle').click();
+    const measurement = await page.locator('#theme-options').evaluate(element => {
+      const toggle = element.querySelector('summary'), icon = toggle.querySelector('svg');
+      const box = toggle.getBoundingClientRect(), glyph = icon.getBoundingClientRect(), panel = element.querySelector('.theme-menu').getBoundingClientRect();
+      const selected = element.querySelector('[aria-pressed=true]').getBoundingClientRect();
+      return { preference: document.documentElement.dataset.themePreference, dx: glyph.x + glyph.width / 2 - box.x - box.width / 2, dy: glyph.y + glyph.height / 2 - box.y - box.height / 2, hit: { width: box.width, height: box.height }, selectedInset: { left: selected.left - panel.left, right: panel.right - selected.right }, rowsFit: [...element.querySelectorAll('button')].every(button => { const row = button.getBoundingClientRect(); return row.left >= panel.left && row.right <= panel.right && row.top >= panel.top && row.bottom <= panel.bottom && row.height >= 44; }), hitCentered: toggle.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)), pageFits: document.documentElement.scrollWidth <= innerWidth };
+    });
+    assert.ok(Math.abs(measurement.dx) < .1 && Math.abs(measurement.dy) < .1, JSON.stringify({ width, ...measurement }));
+    assert.deepEqual(measurement.hit, { width: 44, height: 44 });
+    assert.deepEqual(measurement.selectedInset, { left: 6, right: 6 });
+    assert.equal(measurement.rowsFit && measurement.hitCentered && measurement.pageFits, true);
+    measurements.push({ width, ...measurement });
+    await page.locator('#theme-toggle').click();
+  }
+  return measurements;
+}
 const root = fileURLToPath(new URL('../', import.meta.url));
 const fixture = fileURLToPath(new URL('../tests/fixtures/synthetic-map.json', import.meta.url));
 await fs.mkdir(path.join(root, 'work'), { recursive: true });
@@ -29,11 +50,27 @@ try {
   });
   browser = await chromium.launch({ ...(process.env.PLAYWRIGHT_CHANNEL === 'chromium' ? {} : { channel: process.env.PLAYWRIGHT_CHANNEL || 'chrome' }), headless: true });
   const context = await browser.newContext({ viewport: { width: 1440, height: 960 }, reducedMotion: 'reduce', colorScheme: 'dark' });
-  const external = [], errors = [];
+  const external = [], errors = [], fonts = [];
   await context.route('**/*', route => { if (!route.request().url().startsWith(url) && !route.request().url().startsWith('data:')) { external.push(route.request().url()); route.abort(); } else route.continue(); });
   const page = await context.newPage(); page.setDefaultTimeout(15000); page.on('pageerror', error => errors.push(error.message));
+  page.on('response', response => { if (response.url().endsWith('.woff2')) fonts.push({ url: response.url(), status: response.status(), type: response.headers()['content-type'] }); });
   await page.goto(url);
   await page.waitForFunction(() => document.querySelector('#visible-stat').textContent.includes('12 次'));
+  const font = await page.evaluate(async () => {
+    await document.fonts.load('400 14px "Smiley Sans"'); await document.fonts.ready;
+    return { loaded: [...document.fonts].some(face => face.family.includes('Smiley Sans') && face.status === 'loaded'), family: getComputedStyle(document.documentElement).fontFamily, synthesis: getComputedStyle(document.documentElement).fontSynthesis, samples: ['#running', '.metrics', '.leaflet-container', '#place-label'].map(selector => getComputedStyle(document.querySelector(selector)).fontFamily) };
+  });
+  assert.equal(font.loaded, true, JSON.stringify(font));
+  assert.equal(font.synthesis, 'none');
+  assert.ok(font.samples.every(family => family.startsWith('"Smiley Sans"')));
+  assert.ok(fonts.some(response => response.status === 200 && response.type === 'font/woff2' && /\/assets\/[a-f0-9]{64}\/fonts\/smiley-sans\//.test(response.url)), JSON.stringify(fonts));
+  const themeMeasurements = [];
+  for (const width of [1440, 390, 320]) themeMeasurements.push(...await themeGeometry(page, width));
+  await page.setViewportSize({ width: 1440, height: 960 }); await selectTheme(page, 'system');
+  for (const selector of ['.leaflet-control-zoom-in', '.leaflet-control-zoom-out', '#fit', '#update-map']) {
+    const control = await page.locator(selector).evaluate(element => ({ size: element.getBoundingClientRect().height, icon: !!element.querySelector('svg'), rounded: element.querySelector('svg')?.getAttribute('stroke-linecap') }));
+    assert.ok(control.size >= 44 && control.icon && control.rounded === 'round', JSON.stringify({ selector, control }));
+  }
   assert.equal(await page.locator('#places li').count(), 4);
   assert.equal(await page.locator('#places-panel').isVisible(), false);
   assert.deepEqual(await page.locator('.place-count').allTextContents(), ['6次', '3次', '2次', '1次']);
@@ -62,7 +99,30 @@ try {
   await page.locator('#map-options > summary').click();
   await page.locator('#toggle-places').click();
   await page.locator('.place-button').first().click();
+  const cueId = await page.locator('.place-button[aria-pressed=true]').getAttribute('data-place-id');
+  const cueSelector = `.destination-marker.is-cued button[data-place-id="${cueId}"]`;
+  assert.equal(await page.locator(cueSelector).count(), 1);
+  assert.equal(await page.locator(cueSelector + ' .place-cue-name').textContent(), '地点 1');
+  const cueName = await page.locator(cueSelector + ' .place-cue-name').evaluate(element => ({ width: element.getBoundingClientRect().width, pointer: getComputedStyle(element).pointerEvents, hidden: element.getAttribute('aria-hidden') }));
+  assert.ok(cueName.width <= 180 && cueName.pointer === 'none' && cueName.hidden === 'true', JSON.stringify(cueName));
+  const initialCueDeadline = Number(await page.locator(cueSelector).getAttribute('data-cue-expires-at'));
+  const cueView = await page.locator('.leaflet-map-pane').getAttribute('style');
   await page.locator('#edit-place').click(); await page.locator('#place-label').fill('尚未保存的名称');
+  assert.equal(Number(await page.locator(cueSelector).getAttribute('data-cue-expires-at')), initialCueDeadline, 'Editing must preserve the cue deadline.');
+  assert.equal(await page.locator(cueSelector).evaluate(element => getComputedStyle(element, '::after').animationName), 'none', 'Reduced motion keeps a static cue.');
+  await page.waitForTimeout(350);
+  await page.locator('.place-button').first().click();
+  const renewedCueDeadline = Number(await page.locator(cueSelector).getAttribute('data-cue-expires-at'));
+  assert.ok(renewedCueDeadline > initialCueDeadline + 300);
+  assert.equal(await page.locator('#place-label').inputValue(), '尚未保存的名称');
+  assert.equal(await page.locator('#label-form').isVisible(), true);
+  await page.waitForFunction(() => !document.querySelector('.destination-marker.is-cued'), null, { timeout: 3500 });
+  const expiredAt = await page.evaluate(() => performance.now());
+  assert.ok(expiredAt >= renewedCueDeadline && expiredAt < renewedCueDeadline + 600, JSON.stringify({ renewedCueDeadline, expiredAt }));
+  assert.equal(await page.locator('.destination-marker button[aria-pressed=true]').getAttribute('data-place-id'), cueId);
+  assert.equal(await page.locator('.leaflet-map-pane').getAttribute('style'), cueView);
+  const selectedPin = await page.locator('.destination-marker button[aria-pressed=true]').evaluate(element => ({ disk: getComputedStyle(element, '::before').backgroundColor, pin: getComputedStyle(element.querySelector('svg')).color }));
+  assert.deepEqual(selectedPin, { disk: 'rgb(234, 245, 239)', pin: 'rgb(23, 75, 78)' });
   const viewBeforeTheme = await page.locator('.leaflet-map-pane').getAttribute('style');
   await toggleTheme(page);
   assert.equal(await page.locator('html').getAttribute('data-theme'), 'light');
@@ -70,6 +130,7 @@ try {
   assert.equal(await page.locator('html').getAttribute('data-theme'), 'light');
   assert.equal(await page.locator('#place-label').inputValue(), '尚未保存的名称');
   assert.equal(await page.locator('.leaflet-map-pane').getAttribute('style'), viewBeforeTheme);
+  assert.deepEqual(await page.locator('.destination-marker button[aria-pressed=true]').evaluate(element => ({ disk: getComputedStyle(element, '::before').backgroundColor, pin: getComputedStyle(element.querySelector('svg')).color })), selectedPin);
   await selectTheme(page, 'system');
   assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark');
   await page.emulateMedia({ colorScheme: 'light' });
@@ -157,10 +218,16 @@ try {
   await toggleTheme(page);
   if (process.env.MAP_SCREENSHOTS) {
     await fs.mkdir(process.env.MAP_SCREENSHOTS, { recursive: true });
+    await page.locator('#toggle-places').click();
+    await page.locator('.place-button').first().click();
     await page.screenshot({ path: `${process.env.MAP_SCREENSHOTS}/synthetic-desktop-dark.png` });
     await toggleTheme(page);
     await page.screenshot({ path: `${process.env.MAP_SCREENSHOTS}/synthetic-desktop-light.png` });
     await toggleTheme(page);
+    await page.locator('#theme-toggle').click();
+    await page.screenshot({ path: `${process.env.MAP_SCREENSHOTS}/synthetic-theme-dark.png` });
+    await page.locator('#theme-toggle').click();
+    await page.locator('#toggle-places').click();
   }
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(url);
@@ -193,7 +260,17 @@ try {
   await page.locator('#toggle-places').click(); assert.equal(await page.locator('#places-panel').isVisible(), true);
   await page.locator('.place-button').first().click();
   assert.equal(await page.locator('#selection-summary').isVisible(), true);
-  if (process.env.MAP_SCREENSHOTS) { await fs.mkdir(process.env.MAP_SCREENSHOTS, { recursive: true }); await page.screenshot({ path: `${process.env.MAP_SCREENSHOTS}/synthetic-mobile.png` }); }
+  const mobileCue = await page.locator('.place-cue-name').evaluate(element => {
+    const label = element.getBoundingClientRect(), zoom = document.querySelector('.leaflet-control-zoom').getBoundingClientRect();
+    return { width: label.width, aboveZoom: label.bottom <= zoom.top };
+  });
+  assert.ok(mobileCue.width <= 180 && mobileCue.aboveZoom, JSON.stringify(mobileCue));
+  if (process.env.MAP_SCREENSHOTS) {
+    await page.screenshot({ path: `${process.env.MAP_SCREENSHOTS}/synthetic-mobile-dark.png` });
+    await toggleTheme(page);
+    await page.screenshot({ path: `${process.env.MAP_SCREENSHOTS}/synthetic-mobile-light.png` });
+    await toggleTheme(page);
+  }
   assert.deepEqual(external, []); assert.deepEqual(errors, []);
   await page.setViewportSize({ width: 1440, height: 960 });
   await context.route('https://tile.openstreetmap.org/**', route => route.fulfill({ status: 200, contentType: 'image/png', headers: {'access-control-allow-origin':'*'}, body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jGMsAAAAASUVORK5CYII=', 'base64') }));
@@ -290,6 +367,25 @@ try {
   await motion.locator('#toggle-places').click();
   await motion.waitForTimeout(100);
   const initialList = await motion.locator('#places').boundingBox();
+  const beforeSelectionView = await motion.locator('.leaflet-map-pane').getAttribute('style');
+  await motion.locator('.place-button').first().click();
+  const firstMotionDeadline = Number(await motion.locator('.destination-marker.is-cued button').getAttribute('data-cue-expires-at'));
+  assert.equal(await motion.locator('.destination-marker.is-cued button').evaluate(element => getComputedStyle(element, '::after').animationName), 'place-cue');
+  await motion.waitForTimeout(650);
+  await motion.locator('.place-button').nth(1).click();
+  const rapidId = await motion.locator('.place-button[aria-pressed=true]').getAttribute('data-place-id');
+  assert.equal(await motion.locator('.destination-marker.is-cued button').getAttribute('data-place-id'), rapidId);
+  assert.equal(await motion.locator('.destination-marker.is-cued').count(), 1);
+  assert.equal(await motion.locator('.leaflet-map-pane').getAttribute('style'), beforeSelectionView, 'List selection must not move the map.');
+  const untilOldDeadline = await motion.evaluate(deadline => deadline - performance.now() + 100, firstMotionDeadline);
+  await motion.waitForTimeout(Math.max(0, untilOldDeadline));
+  assert.equal(await motion.locator('.destination-marker.is-cued button').getAttribute('data-place-id'), rapidId, 'An old cue timeout must not clear the latest cue.');
+  await motion.waitForFunction(() => !document.querySelector('.destination-marker.is-cued'), null, { timeout: 1500 });
+  assert.equal(await motion.locator('.place-button[aria-pressed=true]').getAttribute('data-place-id'), rapidId);
+  await motion.locator('#locate-place').click();
+  assert.equal(await motion.locator('.destination-marker.is-cued button').getAttribute('data-place-id'), rapidId, 'Locate must renew the selected place cue.');
+  await motion.locator('#clear-selection').click();
+  assert.equal(await motion.locator('.destination-marker.is-cued, .place-button[aria-pressed=true]').count(), 0);
   await motion.locator('.place-button').first().click();
   await motion.locator('.place-button').first().click();
   assert.equal(await motion.locator('.place-button[aria-pressed=true]').count(), 1);
@@ -360,7 +456,7 @@ try {
   assert.equal(await blockedPage.locator('#label-note').isVisible(), true);
   assert.match(await blockedPage.locator('#label-note').textContent(), /无法保存.*仅本次/);
   await blocked.close();
-  console.log(JSON.stringify({ passed: true, checks: ['default-system', 'theme-persistence-reload', 'theme-preserves-view-and-unsaved-label', 'blocked-storage-toggle', 'short-settings-disclosure', 'both-theme-contrast', 'desktop', 'mobile', 'mobile-activity-navigation-390-320', 'counts', 'no-date-filter', 'labels-persist', 'invalid-source-preserves', 'area-hover', 'raw-coordinates-basemap-toggle', 'visible-base-and-repeat-contrast', 'contrast', 'no-external-network', 'no-page-errors', 'online-layer-cleanup', 'two-layer-switches-only', 'quiet-label-scale', 'tiny-svg-markers', 'marker-opens-panel', 'fractional-tile-rendering-dpr1-dpr2', 'light-repeat-deepening', 'keyboard-marker-selection', 'delayed-tile-continuity', 'stable-place-reselection', 'drawer-draft-and-focus', 'route-contrast-two-themes-multiple-zooms'], contrast, overlapBrightnessRatio: +(six / one).toFixed(2) }, null, 2));
+  console.log(JSON.stringify({ passed: true, checks: ['local-smiley-font', 'theme-icon-centered-three-widths', 'menu-selected-row-contained', 'rounded-svg-controls', 'cue-monotonic-expiry', 'cue-renewal-preserves-edit', 'cue-rapid-selection', 'cue-locate-renewal', 'cue-reduced-motion', 'persistent-pale-selected-pin', 'default-system', 'theme-persistence-reload', 'theme-preserves-view-and-unsaved-label', 'blocked-storage-toggle', 'short-settings-disclosure', 'both-theme-contrast', 'desktop', 'mobile', 'mobile-activity-navigation-390-320', 'counts', 'no-date-filter', 'labels-persist', 'invalid-source-preserves', 'area-hover', 'raw-coordinates-basemap-toggle', 'visible-base-and-repeat-contrast', 'contrast', 'no-external-network', 'no-page-errors', 'online-layer-cleanup', 'two-layer-switches-only', 'quiet-label-scale', 'tiny-svg-markers', 'marker-opens-panel', 'fractional-tile-rendering-dpr1-dpr2', 'light-repeat-deepening', 'keyboard-marker-selection', 'delayed-tile-continuity', 'stable-place-reselection', 'drawer-draft-and-focus', 'route-contrast-two-themes-multiple-zooms'], font, fonts, themeMeasurements, cue: { cueId, initialCueDeadline, renewedCueDeadline, expiredAt, selectedPin }, contrast, overlapBrightnessRatio: +(six / one).toFixed(2) }, null, 2));
 } finally {
   try { await browser?.close(); } finally {
     if (server.exitCode === null && server.signalCode === null) await new Promise(resolve => {

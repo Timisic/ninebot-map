@@ -7,9 +7,15 @@ const launch = new URLSearchParams(location.hash.slice(1));
 const map = L.map('map', { scrollWheelZoom: false, zoomControl: false, attributionControl: true, zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false, preferCanvas: true, minZoom: 3, maxZoom: 19, zoomSnap: 0, zoomDelta: 1 }).setView([0, 0], 13);
 map.attributionControl.setPrefix(false);
 L.control.zoom({ position: 'bottomright' }).addTo(map);
+for (const [selector, name] of [['.leaflet-control-zoom-in', 'plus'], ['.leaflet-control-zoom-out', 'minus']]) document.querySelector(selector).replaceChildren(icon(name));
+$('fit').replaceChildren(icon('expand'));
+$('fit').title = '查看全部路线';
+$('update-map').replaceChildren(icon('refresh'), Object.assign(document.createElement('span'), { textContent: '更新' }));
 installWheelZoom(map);
 const routeLayer = createRouteLayer(map), markers = L.layerGroup().addTo(map);
-let state = { phase: 'idle', model: null, view: null, selected: null, editing: null, labels: {}, storageKey: null };
+let state = { phase: 'idle', model: null, view: null, selected: null, editing: null, labels: {}, storageKey: null, placeCue: null };
+const placeCueDuration = 3000;
+let placeCueTimer = null;
 let tiles = null, importVersion = 0;
 let serverRevision = null, refreshBusy = false, refreshTimer = null;
 let themePreference = document.documentElement.dataset.themePreference || 'system';
@@ -71,9 +77,23 @@ function fit() {
   map.fitBounds(bounds, { paddingTopLeft: [32, 100], paddingBottomRight: [64, 64], maxZoom: 16, animate: false });
 }
 function placeName(place) { return resolvePlaceLabel(place, state.labels); }
+function clearPlaceCue() {
+  clearTimeout(placeCueTimer); placeCueTimer = null; state.placeCue = null;
+}
+function cuePlace(id) {
+  clearPlaceCue();
+  const cue = { datasetId: state.model.datasetId, id, expiresAt: performance.now() + placeCueDuration };
+  state.placeCue = cue;
+  placeCueTimer = setTimeout(() => {
+    if (state.placeCue !== cue || state.phase === 'closed') return;
+    clearPlaceCue(); render();
+  }, placeCueDuration);
+}
 function choosePlace(id, fromMarker = false) {
+  if (!state.view?.destinations.some(place => place.id === id)) return;
   if (fromMarker) setSidebar(true);
-  if (state.selected === id) return;
+  cuePlace(id);
+  if (state.selected === id) { render(); return; }
   state.selected = id; state.editing = null;
   render();
 }
@@ -84,6 +104,7 @@ function render() {
   const listScroll = $('places').scrollTop;
   const { model, view } = state;
   if (!model || !view) return;
+  if (state.placeCue && (state.placeCue.datasetId !== model.datasetId || state.placeCue.expiresAt <= performance.now() || !view.destinations.some(place => place.id === state.placeCue.id))) clearPlaceCue();
   const selectedPlace = view.destinations.find(p => p.id === state.selected);
   if (!selectedPlace) { state.selected = null; state.editing = null; }
   routeLayer.setView(model, view, $('show-grid').checked, selectedPlace ? new Set(selectedPlace.visibleMemberIds) : null, theme === 'light');
@@ -103,7 +124,14 @@ function render() {
     const markerButton = document.createElement('button'); markerButton.type = 'button'; markerButton.dataset.placeId = place.id; markerButton.append(icon('map-pin')); markerButton.title = `${placeName(place)} · ${place.count} 次行程终点`;
     markerButton.setAttribute('aria-label', markerButton.title); markerButton.setAttribute('aria-pressed', String(place.id === state.selected));
     markerButton.addEventListener('click', event => { event.stopPropagation(); choosePlace(place.id, true); });
-    if (index < 6 || place.id === state.selected) L.marker(place.anchor, { icon: L.divIcon({ className: 'destination-marker', html: markerButton, iconSize: [44, 44], iconAnchor: [22, 22] }), keyboard: false, zIndexOffset: 10000 - index * 100, bubblingMouseEvents: false }).addTo(markers);
+    const cued = state.placeCue?.id === place.id;
+    if (cued) {
+      markerButton.style.setProperty('--cue-elapsed', `${state.placeCue.expiresAt - performance.now() - placeCueDuration}ms`);
+      markerButton.dataset.cueExpiresAt = state.placeCue.expiresAt;
+      markerButton.append(Object.assign(document.createElement('span'), { className: 'place-cue-name', textContent: placeName(place) }));
+      markerButton.lastElementChild.setAttribute('aria-hidden', 'true');
+    }
+    if (index < 6 || place.id === state.selected || cued) L.marker(place.anchor, { icon: L.divIcon({ className: `destination-marker${cued ? ' is-cued' : ''}`, html: markerButton, iconSize: [44, 44], iconAnchor: [22, 22] }), keyboard: false, zIndexOffset: place.id === state.selected ? 20000 : 10000 - index * 100, bubblingMouseEvents: false }).addTo(markers);
   }
   $('places').scrollTop = listScroll;
   if (focusPlace) [...document.querySelectorAll(focusMarker ? '.destination-marker button' : '.place-button')].find(button => button.dataset.placeId === focusPlace)?.focus({ preventScroll: true });
@@ -147,9 +175,12 @@ async function loadDataset(text, fitView = true) {
     const model = readRideMap(text, 'unverified');
     const saved = await loadLabels(model);
     if (version !== importVersion) return;
-    stopTiles(); state = { phase: 'ready', model, view: model.select(), selected: null, editing: null, ...saved };
+    stopTiles(); state = { phase: 'ready', model, view: model.select(), selected: null, editing: null, placeCue: state.placeCue, ...saved };
     for (const id of ['show-grid', 'basemap', 'fit']) $(id).disabled = false;
-    $('updated-at').textContent = '更新于 ' + new Intl.DateTimeFormat('zh-CN', { timeZone: model.timezone, dateStyle: 'short', timeStyle: 'short' }).format(new Date(model.updatedAt));
+    const updatedAt = new Date(model.updatedAt);
+    $('updated-at').textContent = '更新于 ' + new Intl.DateTimeFormat('zh-CN', { timeZone: model.timezone, month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(updatedAt);
+    $('updated-at').dateTime = model.updatedAt;
+    $('updated-at').title = new Intl.DateTimeFormat('zh-CN', { timeZone: model.timezone, dateStyle: 'full', timeStyle: 'long' }).format(updatedAt);
     render(); renderUpdate(); if (fitView) fit();
     return true;
   } catch (error) {
@@ -161,7 +192,7 @@ async function loadDataset(text, fitView = true) {
 $('fit').addEventListener('click', fit);
 $('toggle-places').addEventListener('click', () => setSidebar($('toggle-places').getAttribute('aria-expanded') !== 'true'));
 $('show-grid').addEventListener('change', () => { $('cell-info').hidden = true; render(); });
-$('clear-selection').addEventListener('click', () => { state.selected = null; state.editing = null; render(); });
+$('clear-selection').addEventListener('click', () => { clearPlaceCue(); state.selected = null; state.editing = null; render(); });
 $('close-places').addEventListener('click', () => { setSidebar(false); $('toggle-places').focus(); });
 $('edit-place').addEventListener('click', () => {
   const place = state.view.destinations.find(item => item.id === state.selected);
@@ -172,7 +203,7 @@ $('edit-place').addEventListener('click', () => {
 $('cancel-edit').addEventListener('click', () => { state.editing = null; render(); $('edit-place').focus(); });
 $('locate-place').addEventListener('click', () => {
   const place = state.view.destinations.find(item => item.id === state.selected);
-  if (place) map.panTo(place.anchor, { animate: false });
+  if (place) { cuePlace(place.id); render(); map.panTo(place.anchor, { animate: false }); }
 });
 $('label-form').addEventListener('submit', event => {
   event.preventDefault(); if (!state.selected) return;
@@ -220,13 +251,15 @@ function updatedDatasetObserved() {
 function renderUpdate() {
   const button = $('update-map');
   button.disabled = updateState.phase === 'unavailable' || updateState.request === 'dispatching';
-  button.textContent = updateState.request === 'dispatching' ? '提交中' : '更新';
+  button.querySelector('span').textContent = updateState.request === 'dispatching' ? '提交中' : '更新';
+  button.setAttribute('aria-label', updateState.request === 'dispatching' ? '正在提交更新请求' : '获取最新骑行数据');
   button.title = updateState.phase === 'unavailable' ? '当前站点暂不支持在线更新。' : '获取最新骑行数据，所有访客共用 12 小时间隔。';
   const text = {
     idle: '', queued: '等待更新', running: '更新中', unknown: '正在确认更新状态', unavailable: '', failed: '更新未完成，请稍后重试。',
     succeeded: updatedDatasetObserved() ? '地图已更新' : '等待地图更新'
   }[updateState.phase];
   $('update-status').textContent = text; $('update-status').hidden = !text;
+  $('update-status').classList.toggle('visually-hidden', updateState.phase === 'succeeded' && updatedDatasetObserved());
 }
 function parseUpdate(value) {
   const phases = ['idle', 'queued', 'running', 'succeeded', 'failed', 'unknown', 'unavailable'];
@@ -278,7 +311,7 @@ $('update-map').addEventListener('click', async () => {
 });
 
 const observer = new ResizeObserver(() => map.invalidateSize({ animate: false })); observer.observe($('map'));
-window.addEventListener('pagehide', () => { state.phase = 'closed'; importVersion++; clearInterval(refreshTimer); clearTimeout(updateState.timer); clearTimeout(hintTimer); observer.disconnect(); if (tiles) { map.removeLayer(tiles); tiles.off(); } routeLayer.remove(); map.remove(); }, { once: true });
+window.addEventListener('pagehide', () => { state.phase = 'closed'; importVersion++; clearPlaceCue(); clearInterval(refreshTimer); clearTimeout(updateState.timer); clearTimeout(hintTimer); observer.disconnect(); if (tiles) { map.removeLayer(tiles); tiles.off(); } routeLayer.remove(); map.remove(); }, { once: true });
 try {
   const response = await fetch('./dataset.json', { cache: 'no-store' });
   if (response.ok) {

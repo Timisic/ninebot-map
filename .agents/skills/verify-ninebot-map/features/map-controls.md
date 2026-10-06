@@ -4,6 +4,7 @@ A user zooms around the pointer and toggles road tiles over unchanged raw coordi
 
 ## Sub-features
 
+- `rounded-controls` keeps local SVG zoom and fit glyphs inside 44px controls with accessible names.
 - `wheel-continuous` keeps fractional zoom moving through sustained input.
 - `wheel-reverse` cancels the previous target immediately on reversal.
 - `wheel-boundary` respects minimum and maximum zoom.

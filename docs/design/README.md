@@ -2,6 +2,7 @@
 
 - [PRODUCT.md](PRODUCT.md) 保存产品目的与使用场景。
 - [DESIGN.md](DESIGN.md) 保存地图布局、主题、字阶和交互规范。
+- [字体说明](font.md) 保存得意黑的来源、版本、文件校验与许可证。
 - [.impeccable/design.json](.impeccable/design.json) 是设计预览产物，属于项目文档。
 
 Impeccable 本体由 Agent 的技能环境提供，仓库不复制它的全局安装。使用已安装技能的 launcher，从仓库根运行 `impeccable context --target docs/design`，能够读取此处的产品与设计文档。launcher 的实际路径由当前技能安装位置提供。

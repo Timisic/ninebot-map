@@ -88,6 +88,9 @@ class PublicMapTests(unittest.TestCase):
             self.assertNotIn('import-button', html)
             self.assertIn(f'src="./assets/{snapshot.bundle_hash}/app.mjs"', html)
             self.assertEqual((site / f'assets/{snapshot.bundle_hash}/app.mjs').read_bytes(), (WEB_ROOT / 'app.mjs').read_bytes())
+            for filename in ['fonts/smiley-sans/SmileySans-Oblique.woff2', 'fonts/smiley-sans/LICENSE']:
+                self.assertEqual((site / filename).read_bytes(), (WEB_ROOT / filename).read_bytes())
+                self.assertEqual((site / f'assets/{snapshot.bundle_hash}/{filename}').read_bytes(), (WEB_ROOT / filename).read_bytes())
             with self.assertRaises(ValueError):
                 export_site(self.dataset, site)
 

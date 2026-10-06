@@ -9,6 +9,8 @@ ASSETS = {
     '/wheel-zoom.mjs': ('wheel-zoom.mjs', 'text/javascript'),
     '/': ('index.html', 'text/html; charset=utf-8'),
     '/styles.css': ('styles.css', 'text/css; charset=utf-8'),
+    '/fonts/smiley-sans/SmileySans-Oblique.woff2': ('fonts/smiley-sans/SmileySans-Oblique.woff2', 'font/woff2'),
+    '/fonts/smiley-sans/LICENSE': ('fonts/smiley-sans/LICENSE', 'text/plain; charset=utf-8'),
     '/app.mjs': ('app.mjs', 'text/javascript; charset=utf-8'),
     '/vendor/gcoord/gcoord.mjs': ('vendor/gcoord/gcoord.mjs', 'text/javascript; charset=utf-8'),
     '/model.mjs': ('model.mjs', 'text/javascript; charset=utf-8'),
