@@ -70,7 +70,7 @@ npm run verify
 
 浏览器验证默认使用本机安装的 Chrome。CI 使用 `PLAYWRIGHT_CHANNEL=chromium` 和 Playwright 管理的 Chromium。`npm run verify` 保存分项日志和结果，刷新验收另存动作记录与前后截图，并确认自己启动的服务已关闭。证据默认保存在忽略目录 `work/verification/`，也可用 `--output` 指定目录。
 
-可用 `npm run verify -- --suite map`、`--suite wheel`、`--suite startup` 或 `--suite refresh` 验证单项。脚本使用合成 fixture 和独立随机端口，覆盖桌面、小屏幕、活动导航、系统及手动主题、名称持久化、公开更新状态、无效数据刷新、底图开关、原始坐标不变、主题和缩放。首次加载检查通过嵌套静态导出和同源 CSP 验证单次请求、真实加载状态、失败结果与关闭后的清理。网络瓦片在测试中模拟提供，滚轮输入也是合成事件；这些检查不验证真实瓦片可用性或实体触控板手感。Agent 的具体操作与完成条件见[项目验证技能](../.agents/skills/verify-ninebot-map/SKILL.md)。
+可用 `npm run verify -- --suite map`、`--suite wheel`、`--suite startup` 或 `--suite refresh` 验证单项。`map` 同时运行地图与启动检查，现有浏览器 CI 也使用这个入口；`startup` 可单独运行。脚本使用合成 fixture 和独立随机端口，覆盖桌面、小屏幕、活动导航、系统及手动主题、名称持久化、公开更新状态、无效数据刷新、底图开关、原始坐标不变、主题和缩放。首次加载检查通过嵌套静态导出和同源 CSP 验证单次请求、真实加载状态、失败结果与关闭后的清理。网络瓦片在测试中模拟提供，滚轮输入也是合成事件；这些检查不验证真实瓦片可用性或实体触控板手感。Agent 的具体操作与完成条件见[项目验证技能](../.agents/skills/verify-ninebot-map/SKILL.md)。
 
 ## 参考机制
 

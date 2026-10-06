@@ -23,7 +23,7 @@ The refresh harness also performs a read-only HTTP doctor on its owned instance 
 
 - `npm run verify:smoke` checks project layout and the real local map refresh path.
 - `npm run verify` runs project structure, Python, model, browser, wheel and refresh suites.
-- `npm run verify -- --suite map` covers endpoint loading, activity navigation, labels, system theme and basemap behavior.
+- `npm run verify -- --suite map` runs both map and startup suites, covering endpoint loading, startup failures, activity navigation, labels, system theme and basemap behavior. The existing browser CI job uses this group.
 - `npm run verify -- --suite wheel` covers production wheel handling at two device pixel ratios.
 - `npm run verify -- --suite refresh` covers valid updates, preserved controls, invalid replacement and public-update UI responses.
 - `npm run verify -- --suite static` covers public export, relative resource paths, no-import UI, no-ETag refresh and rejected uploads.

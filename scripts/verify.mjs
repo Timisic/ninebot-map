@@ -26,7 +26,8 @@ for (let index = 2; index < process.argv.length; index++) {
     process.exit(0);
   } else throw new Error(`Unknown or incomplete option: ${argument}`);
 }
-const selected = selection === 'all' ? suites : suites.filter(suite => selection === 'smoke' ? ['structure', 'refresh'].includes(suite.id) : suite.id === selection);
+const groups = { smoke: ['structure', 'refresh'], map: ['map', 'startup'] };
+const selected = selection === 'all' ? suites : suites.filter(suite => (groups[selection] || [selection]).includes(suite.id));
 if (!selected.length) throw new Error(`Unknown suite: ${selection}`);
 async function doctor(checkBrowser) {
   const python = spawnSync(path.join(root, '.venv/bin/python'), ['-c', 'import sys, cryptography, PIL; print(sys.version.split()[0])'], { cwd: root, encoding: 'utf8', timeout: 10000 });
