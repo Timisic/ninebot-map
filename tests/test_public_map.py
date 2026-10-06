@@ -87,6 +87,20 @@ class PublicMapTests(unittest.TestCase):
             self.assertNotIn('type="file"', html)
             self.assertNotIn('import-button', html)
             self.assertIn(f'src="./assets/{snapshot.bundle_hash}/app.mjs"', html)
+            self.assertIn(f'src="./assets/{snapshot.bundle_hash}/startup.js"', html)
+            self.assertNotIn('theme-init.js', html)
+            preloads = re.findall(r'<link rel="modulepreload" href="([^"]+)"', html)
+            dependencies = set()
+            pending = ['app.mjs']
+            while pending:
+                filename = pending.pop()
+                for relative in re.findall(r"from ['\"](\./[^'\"]+)['\"]", snapshot.files[filename][0].decode()):
+                    dependency = (Path(filename).parent / relative).as_posix()
+                    if dependency not in dependencies:
+                        dependencies.add(dependency)
+                        pending.append(dependency)
+            self.assertEqual(set(preloads), {f'./assets/{snapshot.bundle_hash}/{filename}' for filename in dependencies})
+            self.assertIn('id="empty" class="empty-state" hidden', html)
             self.assertEqual((site / f'assets/{snapshot.bundle_hash}/app.mjs').read_bytes(), (WEB_ROOT / 'app.mjs').read_bytes())
             for filename in ['fonts/smiley-sans/SmileySans-Oblique.woff2', 'fonts/smiley-sans/LICENSE']:
                 self.assertEqual((site / filename).read_bytes(), (WEB_ROOT / filename).read_bytes())
@@ -202,6 +216,9 @@ class PublicMapTests(unittest.TestCase):
             assets = root / 'retained-assets'
             shutil.copytree(old / 'assets', assets)
             shutil.copytree(new / 'assets', assets, dirs_exist_ok=True)
+            historical_theme = assets / old_hash / 'theme-init.js'
+            historical_theme_bytes = b"document.documentElement.dataset.theme = 'light';\n"
+            historical_theme.write_bytes(historical_theme_bytes)
             current = root / 'current'
             current.symlink_to(old, target_is_directory=True)
             server = module.create_server(current, 0, assets_root=assets)
@@ -222,6 +239,9 @@ class PublicMapTests(unittest.TestCase):
                 pending.replace(current)
                 shutil.rmtree(old)
                 self.assertEqual(request(old_route), (200, previous))
+                self.assertEqual(request(f'/assets/{old_hash}/theme-init.js'), (200, historical_theme_bytes))
+                self.assertEqual(request('/theme-init.js')[0], 404)
+                self.assertEqual(request(f'/assets/{new_hash}/theme-init.js')[0], 404)
                 self.assertEqual(request(f'/assets/{new_hash}/styles.css')[1], (web / 'styles.css').read_bytes())
                 self.assertIn(new_hash.encode(), request('/')[1])
                 for route in [old_route + '?version=1', '/assets/' + '0' * 64 + '/styles.css',
@@ -233,10 +253,13 @@ class PublicMapTests(unittest.TestCase):
                     self.assertEqual(request(route)[0], 404, route)
                 outside = root / 'private-token'
                 outside.write_bytes(b'PRIVATE_SENTINEL')
-                known = assets / new_hash / 'theme-init.js'
+                known = assets / new_hash / 'startup.js'
                 known.unlink()
                 known.symlink_to(outside)
-                self.assertEqual(request(f'/assets/{new_hash}/theme-init.js')[0], 404)
+                self.assertEqual(request(f'/assets/{new_hash}/startup.js')[0], 404)
+                historical_theme.unlink()
+                historical_theme.symlink_to(outside)
+                self.assertEqual(request(f'/assets/{old_hash}/theme-init.js')[0], 404)
             finally:
                 server.shutdown()
                 server.server_close()

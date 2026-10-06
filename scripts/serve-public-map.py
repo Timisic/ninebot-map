@@ -13,6 +13,8 @@ from nbmap.public_updates import PublicUpdates
 import json
 import re
 
+HISTORICAL_IMMUTABLE_FILES = {'theme-init.js': 'text/javascript'}
+
 
 def create_server(root, port=8766, dataset_path=None, *, assets_root=None, updates_config=None, updates_state=None, updates=None):
     root = Path(root).absolute()
@@ -42,7 +44,7 @@ def create_server(root, port=8766, dataset_path=None, *, assets_root=None, updat
             immutable = raw_target.startswith('/assets/')
             if immutable:
                 bundle_hash, _, filename = raw_target[len('/assets/'):].partition('/')
-                mime = IMMUTABLE_FILES.get(filename)
+                mime = IMMUTABLE_FILES.get(filename) or HISTORICAL_IMMUTABLE_FILES.get(filename)
                 if not BUNDLE_HASH.fullmatch(bundle_hash) or mime is None:
                     self.send_error(404)
                     return

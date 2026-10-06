@@ -3,6 +3,11 @@ import { createRouteLayer, createBasemap } from './map-layer.mjs';
 import { icon } from './icons.mjs';
 import { installWheelZoom } from './wheel-zoom.mjs';
 const $ = id => document.getElementById(id);
+if (!window.alongStartup) {
+  $('error').textContent = '地图页面未能加载，请稍后刷新。'; $('error').hidden = false;
+  $('local-status').textContent = '页面加载失败'; $('update-status').hidden = true;
+  for (const id of ['visible-stat', 'history-stat']) $(id).querySelector('strong').textContent = '未能读取';
+} else if (!window.alongStartup.closed) {
 const launch = new URLSearchParams(location.hash.slice(1));
 const map = L.map('map', { scrollWheelZoom: false, zoomControl: false, attributionControl: true, zoomAnimation: false, fadeAnimation: false, markerZoomAnimation: false, preferCanvas: true, minZoom: 3, maxZoom: 19, zoomSnap: 0, zoomDelta: 1 }).setView([0, 0], 13);
 map.attributionControl.setPrefix(false);
@@ -13,10 +18,12 @@ $('fit').title = '查看全部路线';
 $('update-map').replaceChildren(icon('refresh'), Object.assign(document.createElement('span'), { textContent: '更新' }));
 installWheelZoom(map);
 const routeLayer = createRouteLayer(map), markers = L.layerGroup().addTo(map);
-let state = { phase: 'idle', model: null, view: null, selected: null, editing: null, labels: {}, storageKey: null, placeCue: null };
+let state = { phase: 'loading', model: null, view: null, selected: null, editing: null, labels: {}, storageKey: null, placeCue: null };
+const lifecycle = new AbortController();
 const placeCueDuration = 3000;
 let placeCueTimer = null;
 let tiles = null, importVersion = 0;
+let datasetFrame = null, datasetTimer = null, datasetResume = null;
 let serverRevision = null, refreshBusy = false, refreshTimer = null;
 let themePreference = document.documentElement.dataset.themePreference || 'system';
 const systemTheme = matchMedia('(prefers-color-scheme: dark)');
@@ -163,19 +170,27 @@ async function loadLabels(model) {
       const saved = JSON.parse(localStorage.getItem(key) || '{}');
       if (saved && typeof saved === 'object' && !Array.isArray(saved)) Object.assign(labels, Object.fromEntries(Object.entries(saved).filter(([, value]) => typeof value === 'string' && value.length <= 40)));
     }
-  } catch { $('label-note').textContent = '本地存储不可用，名称仅保留到关闭页面。'; }
-  return { storageKey, legacyStorageKey: keys[1], labels };
+  } catch { return { storageKey, legacyStorageKey: keys[1], labels, labelNote: '本地存储不可用，名称仅保留到关闭页面。' }; }
+  return { storageKey, legacyStorageKey: keys[1], labels, labelNote: '' };
 }
 async function loadDataset(text, fitView = true) {
   if (state.phase === 'closed') return;
   const version = ++importVersion;
   state = { ...state, phase: 'loading' }; $('local-status').textContent = '正在读取…'; showError('');
-  await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 0)));
+  await new Promise(resolve => {
+    datasetResume = resolve;
+    datasetFrame = requestAnimationFrame(() => {
+      datasetFrame = null;
+      datasetTimer = setTimeout(() => { datasetTimer = null; datasetResume = null; resolve(); }, 0);
+    });
+  });
+  if (version !== importVersion) return;
   try {
     const model = readRideMap(text, 'unverified');
     const saved = await loadLabels(model);
     if (version !== importVersion) return;
     stopTiles(); state = { phase: 'ready', model, view: model.select(), selected: null, editing: null, placeCue: state.placeCue, ...saved };
+    $('label-note').textContent = saved.labelNote;
     for (const id of ['show-grid', 'basemap', 'fit']) $(id).disabled = false;
     const updatedAt = new Date(model.updatedAt);
     $('updated-at').textContent = '更新于 ' + new Intl.DateTimeFormat('zh-CN', { timeZone: model.timezone, month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(updatedAt);
@@ -186,7 +201,12 @@ async function loadDataset(text, fitView = true) {
   } catch (error) {
     if (version !== importVersion) return;
     state = { ...state, phase: 'error' }; showError(`数据读取失败：${error.message}${state.model ? '。已保留上一份有效地图。' : ''}`);
-    if (state.model) render(); else $('local-status').textContent = '等待数据';
+    if (state.model) render();
+    else {
+      $('local-status').textContent = '数据读取失败';
+      for (const id of ['visible-stat', 'history-stat']) $(id).querySelector('strong').textContent = '未能读取';
+    }
+    renderUpdate();
   }
 }
 $('fit').addEventListener('click', fit);
@@ -254,7 +274,7 @@ function renderUpdate() {
   button.querySelector('span').textContent = updateState.request === 'dispatching' ? '提交中' : '更新';
   button.setAttribute('aria-label', updateState.request === 'dispatching' ? '正在提交更新请求' : '获取最新骑行数据');
   button.title = updateState.phase === 'unavailable' ? '当前站点暂不支持在线更新。' : '获取最新骑行数据，所有访客共用 12 小时间隔。';
-  const text = {
+  const text = state.phase === 'loading' && !state.model ? '正在加载路线…' : {
     idle: '', queued: '等待更新', running: '更新中', unknown: '正在确认更新状态', unavailable: '', failed: '更新未完成，请稍后重试。',
     succeeded: updatedDatasetObserved() ? '地图已更新' : '等待地图更新'
   }[updateState.phase];
@@ -272,7 +292,13 @@ function scheduleUpdateStatus() {
   if (state.phase === 'closed') return;
   const pending = ['queued', 'running', 'unknown'].includes(updateState.phase) || updateState.phase === 'succeeded' && !updatedDatasetObserved();
   updateState.timer = pending ? setTimeout(async () => {
-    if (!document.hidden) { await readUpdateStatus(); await refreshServer(); renderUpdate(); }
+    if (!document.hidden) {
+      await readUpdateStatus();
+      if (state.phase === 'closed') return;
+      await refreshServer();
+      if (state.phase === 'closed') return;
+      renderUpdate();
+    }
     scheduleUpdateStatus();
   }, 5000) : null;
 }
@@ -280,15 +306,21 @@ async function readUpdateStatus() {
   if (updateState.request !== 'idle' || state.phase === 'closed') return;
   updateState.request = 'reading';
   try {
-    const response = await fetch('./api/update', { cache: 'no-store', signal: AbortSignal.timeout(10000) });
+    const response = await fetch('./api/update', { cache: 'no-store', signal: AbortSignal.any([lifecycle.signal, AbortSignal.timeout(10000)]) });
+    if (state.phase === 'closed') return;
     if (response.status === 404) updateState = { ...updateState, phase: 'unavailable', canRequest: false };
     else {
       const status = parseUpdate(await response.json());
+      if (state.phase === 'closed') return;
       updateState = { ...updateState, ...status };
     }
   } catch {
+    if (state.phase === 'closed') return;
     updateState = { ...updateState, phase: updateState.phase === 'unavailable' ? 'unavailable' : 'unknown', canRequest: false };
-  } finally { updateState.request = 'idle'; renderUpdate(); scheduleUpdateStatus(); }
+  } finally {
+    updateState.request = 'idle';
+    if (state.phase !== 'closed') { renderUpdate(); scheduleUpdateStatus(); }
+  }
 }
 $('update-map').addEventListener('click', async () => {
   if (updateState.request !== 'idle') return;
@@ -310,18 +342,29 @@ $('update-map').addEventListener('click', async () => {
   finally { updateState.request = 'idle'; renderUpdate(); scheduleUpdateStatus(); }
 });
 
-const observer = new ResizeObserver(() => map.invalidateSize({ animate: false })); observer.observe($('map'));
-window.addEventListener('pagehide', () => { state.phase = 'closed'; importVersion++; clearPlaceCue(); clearInterval(refreshTimer); clearTimeout(updateState.timer); clearTimeout(hintTimer); observer.disconnect(); if (tiles) { map.removeLayer(tiles); tiles.off(); } routeLayer.remove(); map.remove(); }, { once: true });
-try {
-  const response = await fetch('./dataset.json', { cache: 'no-store' });
-  if (response.ok) {
-    const text = await response.text();
-    serverRevision = response.headers.get('ETag') || await hashText(text);
-    await loadDataset(text);
-    if (launch.get('basemap') === 'osm' && state.model) { $('basemap').checked = true; updateBasemap(); }
+const observer = new ResizeObserver(() => { if (state.phase !== 'closed') map.invalidateSize({ animate: false }); }); observer.observe($('map'));
+window.addEventListener('pagehide', () => { state.phase = 'closed'; importVersion++; lifecycle.abort(); cancelAnimationFrame(datasetFrame); clearTimeout(datasetTimer); datasetResume?.(); datasetResume = null; clearPlaceCue(); clearInterval(refreshTimer); clearTimeout(updateState.timer); clearTimeout(hintTimer); observer.disconnect(); if (tiles) { map.removeLayer(tiles); tiles.off(); } routeLayer.remove(); map.remove(); }, { once: true });
+let initial = await window.alongStartup.dataset;
+delete window.alongStartup.dataset;
+if (state.phase !== 'closed') {
+  if (initial.kind === 'available') {
+    if (await loadDataset(initial.text)) {
+      const revision = initial.etag || await hashText(initial.text);
+      if (state.phase !== 'closed') {
+        serverRevision = revision;
+        if (launch.get('basemap') === 'osm') { $('basemap').checked = true; updateBasemap(); }
+      }
+    }
+  } else if (initial.kind === 'missing' || initial.kind === 'failed') {
+    state.phase = initial.kind === 'missing' ? 'empty' : 'error';
+    $('local-status').textContent = initial.kind === 'missing' ? '等待地图数据' : '地图服务暂不可用';
+    for (const id of ['visible-stat', 'history-stat']) $(id).querySelector('strong').textContent = initial.kind === 'missing' ? '暂无数据' : '未能读取';
+    $('empty').hidden = initial.kind !== 'missing';
+    if (initial.kind === 'failed') showError(initial.message);
+    renderUpdate();
   }
-  else if (response.status !== 404) showError('地图数据暂不可用，请稍后刷新。');
-} catch { showError('地图服务暂时无法连接，请稍后刷新。'); }
+}
+initial = null;
 await readUpdateStatus();
 
 async function refreshServer() {
@@ -329,10 +372,11 @@ async function refreshServer() {
   refreshBusy = true;
   const requestVersion = importVersion;
   try {
-    const head = await fetch('./dataset.json', { method: 'HEAD', cache: 'no-store' });
+    const head = await fetch('./dataset.json', { method: 'HEAD', cache: 'no-store', signal: lifecycle.signal });
+    if (state.phase === 'closed') return;
     const revision = head.headers.get('ETag');
     if (!head.ok || (revision && revision === serverRevision)) return;
-    const response = await fetch('./dataset.json', { cache: 'no-store' });
+    const response = await fetch('./dataset.json', { cache: 'no-store', signal: lifecycle.signal });
     const text = await response.text();
     const nextRevision = response.headers.get('ETag') || await hashText(text);
     if (nextRevision === serverRevision) return;
@@ -354,3 +398,4 @@ if (state.phase !== 'closed') refreshTimer = setInterval(refreshServer, 60000);
 window.addEventListener('focus', refreshServer);
 window.addEventListener('focus', readUpdateStatus);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { refreshServer(); readUpdateStatus(); } });
+}

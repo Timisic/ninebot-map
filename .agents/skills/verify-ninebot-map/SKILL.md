@@ -27,6 +27,7 @@ The refresh harness also performs a read-only HTTP doctor on its owned instance 
 - `npm run verify -- --suite wheel` covers production wheel handling at two device pixel ratios.
 - `npm run verify -- --suite refresh` covers valid updates, preserved controls, invalid replacement and public-update UI responses.
 - `npm run verify -- --suite static` covers public export, relative resource paths, no-import UI, no-ETag refresh and rejected uploads.
+- `npm run verify -- --suite startup` covers one early dataset fetch, truthful loading and failures, zero tracks, nested exports, module reuse, validated ETags, and closed-page cleanup.
 - `npm run verify -- --suite python` covers collector, local server, scheduler and cloud behavior with synthetic adapters.
 - `npm run verify -- --suite model` covers route, grid and destination calculations.
 
@@ -46,6 +47,6 @@ The harness closes its browser and terminates only its spawned server. Refresh p
 
 ## Helpers
 
-`scripts/verify.mjs` is the executable wrapper behind the npm commands. `scripts/check-project.py` checks layout, links, skill shape and tracked runtime-file boundaries. The wrapper reuses `scripts/verify-map.mjs`, `scripts/verify-wheel.mjs` and `scripts/verify-auto-sync.mjs`; add feature coverage there rather than building another harness.
+`scripts/verify.mjs` is the executable wrapper behind the npm commands. `scripts/check-project.py` checks layout, links, skill shape and tracked runtime-file boundaries. The wrapper reuses `scripts/verify-map.mjs`, `scripts/verify-wheel.mjs`, `scripts/verify-startup.mjs` and `scripts/verify-auto-sync.mjs`; add feature coverage to the matching harness.
 
 Keep this map aligned with actual entry points. Use `pstack-personal:maintain-verification-skill` when asked to audit it after feature changes.

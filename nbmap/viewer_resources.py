@@ -5,7 +5,7 @@ from pathlib import Path
 
 WEB_ROOT = Path(__file__).resolve().parent.parent / 'web'
 ASSETS = {
-    '/theme-init.js': ('theme-init.js', 'text/javascript'),
+    '/startup.js': ('startup.js', 'text/javascript'),
     '/wheel-zoom.mjs': ('wheel-zoom.mjs', 'text/javascript'),
     '/': ('index.html', 'text/html; charset=utf-8'),
     '/styles.css': ('styles.css', 'text/css; charset=utf-8'),
