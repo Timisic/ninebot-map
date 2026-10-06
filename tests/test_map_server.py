@@ -1,5 +1,6 @@
 import http.client
 import json
+import re
 import tempfile
 import threading
 import unittest
@@ -7,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from nbmap.map_server import ASSETS, create_server
+from nbmap.viewer_resources import viewer_resources, WEB_ROOT
 from nbmap.__main__ import main
 from nbmap.archive import RideArchive
 
@@ -49,6 +51,25 @@ class MapServerTests(unittest.TestCase):
         for path in ['/.private/tokens.json', '/tokens.json', '/data/', '/../README.md', '/%2e%2e/.private/tokens.json', '//dataset.json', '/dataset.json?x=1', '/web/app.mjs', '/vendor/leaflet/../../README.md']:
             self.assertEqual(self.request(path)[0], 404, path)
         self.assertEqual(self.request('/')[0], 200)
+
+    def test_versioned_assets_are_exact_aliases_and_keep_relative_imports(self):
+        snapshot = viewer_resources(WEB_ROOT)
+        prefix = f'/assets/{snapshot.bundle_hash}/'
+        html = self.request('/')[2].decode()
+        entries = re.findall(r'(?:src|href)="(\./assets/[^\"]+)"', html)
+        self.assertTrue(entries)
+        for entry in entries:
+            self.assertEqual(self.request(entry[1:])[0], 200, entry)
+        for filename, (body, _) in snapshot.files.items():
+            if filename.startswith('assets/'):
+                self.assertEqual(self.request('/' + filename)[2], body)
+        self.assertIn(b"from './model.mjs'", self.request(prefix + 'app.mjs')[2])
+        self.assertEqual(self.request(prefix + 'vendor/leaflet/images/marker-icon.png')[2], self.request('/vendor/leaflet/images/marker-icon.png')[2])
+        for path in [prefix + 'styles.css?version=1', '/assets/' + '0' * 64 + '/styles.css',
+                     prefix + '../styles.css', prefix + 'index.html', prefix + 'dataset.json',
+                     prefix + '.private/tokens.json', prefix + 'vendor/leaflet/../../README.md',
+                     '/assets/' + snapshot.bundle_hash.upper() + '/styles.css']:
+            self.assertEqual(self.request(path)[0], 404, path)
 
     def test_host_origin_and_cross_site_requests_are_rejected(self):
         for headers in [{'Host': 'evil.example'}, {'Origin': 'https://evil.example'}, {'Origin': 'null'}, {'Sec-Fetch-Site': 'cross-site'}]:

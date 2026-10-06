@@ -430,6 +430,7 @@ class PublicUpdateTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr.decode())
         manifest = json.loads((output / 'manifest.json').read_bytes())
         self.assertIn('code/nbmap/public_updates.py', manifest['files'])
+        self.assertIn('code/nbmap/viewer_resources.py', manifest['files'])
         self.assertIn('map-update.example.json', manifest['files'])
         self.assertIn('map-site.service', manifest['files'])
         self.assertFalse(any('state.sqlite3' in path or 'github-token' in path for path in manifest['files']))

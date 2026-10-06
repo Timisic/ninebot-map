@@ -6,7 +6,7 @@ After=network.target
 Type=simple
 User=ubuntu
 WorkingDirectory=/home/ubuntu/hong/ninebot-map-site
-ExecStart=/usr/bin/python3 /home/ubuntu/hong/ninebot-map-site/code/scripts/serve-public-map.py --root /home/ubuntu/hong/ninebot-map-site/current --dataset /home/ubuntu/hong/ninebot-map-site/data/dataset.json --port 8766 --updates-config /etc/along-map/update.json --updates-state /var/lib/along-map-update/state.sqlite3
+ExecStart=/usr/bin/python3 /home/ubuntu/hong/ninebot-map-site/code/scripts/serve-public-map.py --root /home/ubuntu/hong/ninebot-map-site/current --assets-root /home/ubuntu/hong/ninebot-map-site/assets --dataset /home/ubuntu/hong/ninebot-map-site/data/dataset.json --port 8766 --updates-config /etc/along-map/update.json --updates-state /var/lib/along-map-update/state.sqlite3
 Environment=PYTHONDONTWRITEBYTECODE=1
 StateDirectory=along-map-update
 StateDirectoryMode=0700

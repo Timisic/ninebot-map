@@ -10,7 +10,8 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from .dataset import validate_dataset
-from .map_server import ASSETS, MAX_BYTES, WEB_ROOT
+from .map_server import MAX_BYTES
+from .viewer_resources import WEB_ROOT, viewer_resources
 
 FORMAT = 'public-ride-map'
 SUMMARY_FIELDS = {'ride_count', 'total_distance_m', 'known_distance_m', 'missing_distance_count',
@@ -129,10 +130,10 @@ def export_site(dataset, output, updated_at=None):
     output.parent.mkdir(parents=True, exist_ok=True)
     temporary = Path(tempfile.mkdtemp(prefix='.map-site-', dir=output.parent))
     try:
-        for filename, _ in ASSETS.values():
+        for filename, (body, _) in viewer_resources(WEB_ROOT).files.items():
             target = temporary / filename
             target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(WEB_ROOT / filename, target)
+            target.write_bytes(body)
         for relative in ('leaflet/LICENSE', 'gcoord/LICENSE', 'lucide/LICENSE'):
             target = temporary / 'vendor' / relative
             target.parent.mkdir(parents=True, exist_ok=True)

@@ -11,6 +11,13 @@ const scratch=await fs.mkdtemp(path.join(root,'work/static-'));
 const site=path.join(scratch,'map');
 execFileSync('./run',['export-site','--dataset','tests/fixtures/synthetic-map.json','--output',site]);
 const original=JSON.parse(await fs.readFile(path.join(site,'dataset.json'),'utf8'));
+const oldSite=path.join(scratch,'old-map');
+const fixtureScript=`import json, shutil\nfrom pathlib import Path\nfrom unittest.mock import patch\nfrom nbmap.public_map import export_site\np=Path(${JSON.stringify(scratch)})\nw=p/'old-web'\nshutil.copytree('web',w)\nlegacy='\\n[data-theme=dark]{--background:#142126;--map-background:#142126;--panel:#213237}\\n.activity-nav button{border:1px solid #3d5559;background:#213237}\\n.toolbar{background:#213237;border-radius:14px}\\n'\ncss=w/'styles.css'\ncss.write_text(css.read_text()+legacy)\nwith patch('nbmap.public_map.WEB_ROOT',w):\n export_site(json.loads(Path('tests/fixtures/synthetic-map.json').read_text()),p/'old-map')\n`;
+execFileSync('./.venv/bin/python',['-c',fixtureScript]);
+const retainedAssets=path.join(scratch,'assets');
+await fs.cp(path.join(oldSite,'assets'),retainedAssets,{recursive:true});
+await fs.cp(path.join(site,'assets'),retainedAssets,{recursive:true});
+let activeSite=site,longCache=false;
 const types={'.html':'text/html','.mjs':'text/javascript','.js':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png'};
 const requests=[];
 const server=createServer(async(req,res)=>{
@@ -18,7 +25,7 @@ const server=createServer(async(req,res)=>{
  if(!['GET','HEAD'].includes(req.method)){res.writeHead(405);res.end();return;}
  const name=req.url==='/map/'?'index.html':req.url?.startsWith('/map/')?req.url.slice(5):null;
  if(!name||name.includes('..')||name.includes('?')){res.writeHead(404);res.end();return;}
- try{const bytes=await fs.readFile(path.join(site,name));res.writeHead(200,{'Content-Type':types[path.extname(name)]||'text/plain','Cache-Control':'no-store'});res.end(req.method==='HEAD'?undefined:bytes);}catch{res.writeHead(404);res.end();}
+ try{const target=name.startsWith('assets/')?path.join(retainedAssets,name.slice(7)):path.join(activeSite,name);const bytes=await fs.readFile(target);res.writeHead(200,{'Content-Type':types[path.extname(name)]||'text/plain','Cache-Control':longCache&&/\.(css|mjs|js)$/.test(name)?'public, max-age=14400':'no-store'});res.end(req.method==='HEAD'?undefined:bytes);}catch{res.writeHead(404);res.end();}
 });
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const origin=`http://127.0.0.1:${server.address().port}`;
@@ -55,6 +62,47 @@ try{
  assert.equal((await fetch(origin+'/map/dataset.json',{method:'POST',body:'{}'})).status,405);
  assert.deepEqual(external,[]);assert.deepEqual(errors,[]);
  await page.screenshot({path:path.join(output,'static-after.png')});
- await fs.writeFile(path.join(output,'static.json'),JSON.stringify({passed:true,synthetic:true,nestedPath:true,withoutETagRefresh:true,invalidReplacementRetainsVisibleMap:true,manualImportAbsent:true,external,errors,requests},null,2));
- console.log('Static map passed: nested paths, no import, no secrets, no-ETag refresh, saved labels, invalid update retention.');
+ const cacheContext=await browser.newContext({viewport:{width:1100,height:800},colorScheme:'dark'});
+ const cachedPage=await cacheContext.newPage();
+ const cacheErrors=[];cachedPage.on('pageerror',error=>cacheErrors.push(error.message));
+ const state=()=>cachedPage.locator('#running').evaluate(element=>({border:getComputedStyle(element).borderTopWidth,background:getComputedStyle(document.querySelector('#map')).backgroundColor}));
+ activeSite=oldSite;longCache=true;
+ await cachedPage.goto(origin+'/map/');await cachedPage.waitForFunction(()=>document.querySelector('#visible-stat').textContent.includes('12 次'));
+ const old=await state();
+ assert.equal(old.border,'1px');assert.equal(old.background,'rgb(20, 33, 38)');
+ const oldHash=(await cachedPage.locator('script[src$="app.mjs"]').getAttribute('src')).match(/assets\/([a-f0-9]{64})\//)[1];
+ const oldRequests=requests.filter(request=>request.path.includes(oldHash));
+ assert.ok(oldRequests.some(request=>request.path.endsWith('/styles.css')));
+ const requestOffset=requests.length;
+ activeSite=site;
+ await cachedPage.goto(origin+'/map/');await cachedPage.waitForFunction(()=>document.querySelector('#visible-stat').textContent.includes('12 次'));
+ const fresh=await state();
+ assert.equal(fresh.border,'0px','A normal navigation must replace the cached bordered Running button.');
+ assert.equal(fresh.background,'rgb(32, 33, 35)','A normal navigation must load the neutral dark map.');
+ const freshHash=(await cachedPage.locator('script[src$="app.mjs"]').getAttribute('src')).match(/assets\/([a-f0-9]{64})\//)[1];
+ assert.notEqual(freshHash,oldHash);
+ const freshRequests=requests.slice(requestOffset).filter(request=>/\.(css|mjs|js)$/.test(request.path));
+ assert.ok(freshRequests.some(request=>request.path.endsWith('/styles.css')));
+ for(const request of freshRequests)assert.match(request.path,new RegExp(`^/map/assets/${freshHash}/`));
+ const marker=await cachedPage.evaluate(()=>{
+  const container=document.createElement('div');container.style.cssText='position:absolute;left:-1000px;width:200px;height:200px';document.body.append(container);
+  const map=L.map(container).setView([0,0],10);const marker=L.marker([0,0]).addTo(map);
+  window.verificationMarker={map,container};
+  return {icon:marker._icon.src,shadow:marker._shadow.src};
+ });
+ await fs.writeFile(path.join(output,'static-marker.json'),JSON.stringify({marker,requests:requests.slice(requestOffset)},null,2));
+ await cachedPage.waitForFunction(()=>[...document.querySelectorAll('img.leaflet-marker-icon,img.leaflet-marker-shadow')].every(image=>image.complete&&image.naturalWidth>0),{},{timeout:5000});
+ for(const source of Object.values(marker)){
+  const markerPath=new URL(source).pathname;
+  assert.match(markerPath,new RegExp(`^/map/assets/${freshHash}/vendor/leaflet/images/marker-`));
+  assert.ok(requests.some(request=>request.path===markerPath),'The default Leaflet marker must resolve without a query suffix.');
+ }
+ await cachedPage.evaluate(()=>{window.verificationMarker.map.remove();window.verificationMarker.container.remove();delete window.verificationMarker;});
+ assert.deepEqual(cacheErrors,[]);
+ await cachedPage.screenshot({path:path.join(output,'static-cache-after.png')});
+ const cache={withoutRequestInterception:true,cacheControl:'public, max-age=14400',navigation:'normal',old,fresh,oldHash,freshHash,marker,requests:requests.slice(requestOffset)};
+ await fs.writeFile(path.join(output,'static-cache.json'),JSON.stringify(cache,null,2));
+ await cacheContext.close();
+ await fs.writeFile(path.join(output,'static.json'),JSON.stringify({passed:true,synthetic:true,nestedPath:true,withoutETagRefresh:true,invalidReplacementRetainsVisibleMap:true,manualImportAbsent:true,immutableBundleCache:true,defaultLeafletMarker:true,cache,external,errors,requests},null,2));
+ console.log('Static map passed: nested paths, no import, no secrets, no-ETag refresh, saved labels, invalid update retention, cached release replacement, and default Leaflet marker.');
 }finally{await browser?.close();await new Promise(resolve=>server.close(resolve));await fs.rm(scratch,{recursive:true,force:true});}

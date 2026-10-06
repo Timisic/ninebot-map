@@ -20,7 +20,7 @@ if args.output.exists():
     raise SystemExit('Output must be a new directory.')
 args.output.mkdir(parents=True, mode=0o700)
 export_site(json.loads(args.dataset.read_text()), args.output / 'public')
-code_files = ['nbmap/__init__.py', 'nbmap/public_map.py', 'nbmap/public_updates.py', 'nbmap/map_server.py', 'nbmap/dataset.py', 'nbmap/storage.py',
+code_files = ['nbmap/__init__.py', 'nbmap/public_map.py', 'nbmap/public_updates.py', 'nbmap/map_server.py', 'nbmap/viewer_resources.py', 'nbmap/dataset.py', 'nbmap/storage.py',
               'scripts/serve-public-map.py', 'scripts/receive-public-map.py']
 for relative in code_files:
     target = args.output / 'code' / relative

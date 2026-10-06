@@ -6,24 +6,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from .dataset import validate_dataset
+from .viewer_resources import ASSETS, WEB_ROOT, viewer_resources
 
 MAX_BYTES = 40 * 1024 * 1024
-WEB_ROOT = Path(__file__).resolve().parent.parent / 'web'
-ASSETS = {
-    '/theme-init.js': ('theme-init.js', 'text/javascript'),
-    '/wheel-zoom.mjs': ('wheel-zoom.mjs', 'text/javascript'),
-    '/': ('index.html', 'text/html; charset=utf-8'),
-    '/styles.css': ('styles.css', 'text/css; charset=utf-8'),
-    '/app.mjs': ('app.mjs', 'text/javascript; charset=utf-8'),
-    '/vendor/gcoord/gcoord.mjs': ('vendor/gcoord/gcoord.mjs', 'text/javascript; charset=utf-8'),
-    '/model.mjs': ('model.mjs', 'text/javascript; charset=utf-8'),
-    '/icons.mjs': ('icons.mjs', 'text/javascript; charset=utf-8'),
-    '/map-layer.mjs': ('map-layer.mjs', 'text/javascript; charset=utf-8'),
-    '/vendor/leaflet/leaflet.js': ('vendor/leaflet/leaflet.js', 'text/javascript; charset=utf-8'),
-    '/vendor/leaflet/leaflet.css': ('vendor/leaflet/leaflet.css', 'text/css; charset=utf-8'),
-}
-for _image in ('layers.png', 'layers-2x.png', 'marker-icon.png', 'marker-icon-2x.png', 'marker-shadow.png'):
-    ASSETS['/vendor/leaflet/images/' + _image] = ('vendor/leaflet/images/' + _image, 'image/png')
 
 
 def read_map_dataset(path):
@@ -73,7 +58,7 @@ def create_server(dataset_path=None, port=0):
             except (ValueError, OSError):
                 pass  # Keep the last validated dataset during failed/invalid replacement.
             return snapshot, revision
-    resources = {route: (WEB_ROOT.joinpath(filename).read_bytes(), mime) for route, (filename, mime) in ASSETS.items()}
+    resources = viewer_resources(WEB_ROOT).routes
 
     class Handler(BaseHTTPRequestHandler):
         server_version = 'LocalRideMap'

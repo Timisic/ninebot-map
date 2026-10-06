@@ -8,10 +8,14 @@ import sys
 import threading
 import http.client
 import importlib.util
+import re
+import shutil
+from unittest.mock import patch
 from pathlib import Path
 
 from nbmap.public_map import public_dataset, publish_dataset, export_site, validate_public
 from nbmap.map_server import ASSETS
+from nbmap.viewer_resources import viewer_resources, WEB_ROOT, IMMUTABLE_FILES
 
 FIXTURE = Path(__file__).parent / 'fixtures/synthetic-map.json'
 
@@ -74,15 +78,34 @@ class PublicMapTests(unittest.TestCase):
             site = Path(directory) / 'site'
             export_site(self.dataset, site)
             paths = {str(p.relative_to(site)) for p in site.rglob('*') if p.is_file()}
-            expected = {file for file, _ in ASSETS.values()} | {'dataset.json', 'vendor/leaflet/LICENSE', 'vendor/gcoord/LICENSE', 'vendor/lucide/LICENSE'}
+            snapshot = viewer_resources(WEB_ROOT)
+            expected = {filename for filename, _ in ASSETS.values()} | {'dataset.json', 'vendor/leaflet/LICENSE', 'vendor/gcoord/LICENSE', 'vendor/lucide/LICENSE'}
+            expected |= {f'assets/{snapshot.bundle_hash}/{filename}' for filename, _ in ASSETS.values() if filename != 'index.html'}
             self.assertEqual(paths, expected)
             validate_public(json.loads((site / 'dataset.json').read_text()))
             html = (site / 'index.html').read_text()
             self.assertNotIn('type="file"', html)
             self.assertNotIn('import-button', html)
-            self.assertIn('src="./app.mjs"', html)
+            self.assertIn(f'src="./assets/{snapshot.bundle_hash}/app.mjs"', html)
+            self.assertEqual((site / f'assets/{snapshot.bundle_hash}/app.mjs').read_bytes(), (WEB_ROOT / 'app.mjs').read_bytes())
             with self.assertRaises(ValueError):
                 export_site(self.dataset, site)
+
+    def test_bundle_hash_changes_for_any_allowed_source_without_rewriting_imports(self):
+        with tempfile.TemporaryDirectory() as directory:
+            web = Path(directory) / 'web'
+            shutil.copytree(WEB_ROOT, web)
+            original = viewer_resources(web)
+            self.assertEqual(original.bundle_hash, viewer_resources(web).bundle_hash)
+            (web / 'model.mjs').write_bytes((web / 'model.mjs').read_bytes() + b'\n')
+            changed = viewer_resources(web)
+            self.assertNotEqual(changed.bundle_hash, original.bundle_hash)
+            self.assertEqual(changed.files['app.mjs'], original.files['app.mjs'])
+            self.assertEqual(changed.files['vendor/leaflet/leaflet.css'], original.files['vendor/leaflet/leaflet.css'])
+            with patch('nbmap.public_map.WEB_ROOT', web):
+                site = export_site(self.dataset, Path(directory) / 'site')
+            self.assertIn(f'./assets/{changed.bundle_hash}/app.mjs', (site / 'index.html').read_text())
+            self.assertFalse(any('?' in str(p) for p in site.rglob('*')))
 
     def test_receiver_validates_stdin_and_rejects_old_or_private_payloads(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -138,6 +161,12 @@ class PublicMapTests(unittest.TestCase):
                 self.assertEqual(request('/')[1]['Referrer-Policy'], 'strict-origin-when-cross-origin')
                 self.assertEqual(request('/index.html')[0], 200)
                 self.assertEqual(request('/dataset.json')[1]['ETag'], request('/dataset.json', 'HEAD')[1]['ETag'])
+                bundle_hash = re.search(r'\./assets/([a-f0-9]{64})/', (site / 'index.html').read_text()).group(1)
+                for filename in IMMUTABLE_FILES:
+                    asset = request(f'/assets/{bundle_hash}/{filename}')
+                    self.assertEqual(asset[0], 200, filename)
+                    self.assertEqual(asset[2], (site / filename).read_bytes())
+                    self.assertEqual(asset[1]['Cache-Control'], 'public, max-age=31536000, immutable')
                 for path in ['/upload', '/import', '/.private/tokens.json', '/dataset.lock', '/data/', '/scripts/']:
                     self.assertEqual(request(path)[0], 404)
                 for method in ['POST', 'PUT', 'PATCH', 'DELETE']:
@@ -148,6 +177,63 @@ class PublicMapTests(unittest.TestCase):
                 pending.symlink_to(replacement, target_is_directory=True)
                 pending.replace(current)
                 self.assertEqual(request('/styles.css')[2], b'body { color: red; }')
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join()
+
+    def test_public_host_retains_old_bundles_and_rejects_paths_outside_allowlist(self):
+        spec = importlib.util.spec_from_file_location('static_map_server', 'scripts/serve-public-map.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            web = root / 'web'
+            shutil.copytree(WEB_ROOT, web)
+            with patch('nbmap.public_map.WEB_ROOT', web):
+                old = export_site(self.dataset, root / 'old')
+                old_hash = viewer_resources(web).bundle_hash
+                (web / 'styles.css').write_bytes((web / 'styles.css').read_bytes() + b'\nbody {color: red;}\n')
+                new = export_site(self.dataset, root / 'new')
+                new_hash = viewer_resources(web).bundle_hash
+            assets = root / 'retained-assets'
+            shutil.copytree(old / 'assets', assets)
+            shutil.copytree(new / 'assets', assets, dirs_exist_ok=True)
+            current = root / 'current'
+            current.symlink_to(old, target_is_directory=True)
+            server = module.create_server(current, 0, assets_root=assets)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                def request(path):
+                    client = http.client.HTTPConnection('127.0.0.1', server.server_port)
+                    client.request('GET', path)
+                    response = client.getresponse()
+                    result = response.status, response.read()
+                    client.close()
+                    return result
+                old_route = f'/assets/{old_hash}/styles.css'
+                previous = request(old_route)[1]
+                pending = root / 'next'
+                pending.symlink_to(new, target_is_directory=True)
+                pending.replace(current)
+                shutil.rmtree(old)
+                self.assertEqual(request(old_route), (200, previous))
+                self.assertEqual(request(f'/assets/{new_hash}/styles.css')[1], (web / 'styles.css').read_bytes())
+                self.assertIn(new_hash.encode(), request('/')[1])
+                for route in [old_route + '?version=1', '/assets/' + '0' * 64 + '/styles.css',
+                              f'/assets/{old_hash}/index.html', f'/assets/{old_hash}/dataset.json',
+                              f'/assets/{old_hash}/vendor/leaflet/../../README.md',
+                              f'/assets/{old_hash}/../{new_hash}/styles.css',
+                              f'/assets/{old_hash}/.private/tokens.json', f'/assets/{old_hash}/%73tyles.css',
+                              '/dataset.json?refresh=1', '//styles.css']:
+                    self.assertEqual(request(route)[0], 404, route)
+                outside = root / 'private-token'
+                outside.write_bytes(b'PRIVATE_SENTINEL')
+                known = assets / new_hash / 'theme-init.js'
+                known.unlink()
+                known.symlink_to(outside)
+                self.assertEqual(request(f'/assets/{new_hash}/theme-init.js')[0], 404)
             finally:
                 server.shutdown()
                 server.server_close()
