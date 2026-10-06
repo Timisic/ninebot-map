@@ -10,7 +10,7 @@ A user opens a local map and sees the configured dataset with visible-map and al
 - `quiet-statistics` uses the existing legend's 11px text without an extra frame.
 - `invalid-replacement` retains the previous valid map.
 
-## How to get to it
+## How to get to it (user POV)
 
 Run `./run map --dataset tests/fixtures/synthetic-map.json --port 0 --no-open`.
 

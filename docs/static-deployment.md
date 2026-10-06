@@ -51,7 +51,7 @@ Along 页面读取地图数据，并可通过指定服务器请求 GitHub Action
 5. 私有工作流采用 `templates/cloud-sync.yml`。公开请求携带服务器生成的 UUID v4，工作流使用 `Along public <UUID>` 的运行名称。采集端要求网站和两个不同的 PNG 目标均已配置。
 6. 重载 systemd 并重启 `ninebot-map-site.service`。先检查只读 `GET /api/update`，再用一次获授权的 POST 检查真实 Actions、地图和两处 PNG 发布。
 
-缺少配置或 credential 时，网页和已有地图继续可用，更新状态为 `unavailable`。普通静态托管不会获得触发能力。服务模板默认注释 credential 指令，避免未配置令牌时影响地图托管。
+缺少配置或 credential 时，网页和已有地图继续可用，更新状态为 `unavailable`。普通静态托管不会获得触发能力。配置令牌后再向服务添加 credential 指令，避免未配置时影响地图托管。
 
 API 仅返回 `phase`、`can_request`、`requested_at` 和 `next_allowed_at`。`phase` 为 `idle`、`queued`、`running`、`succeeded`、`failed`、`unknown` 或 `unavailable`。GET 读取数据库，不访问 GitHub。POST 必须携带 JSON 空对象、匹配配置的 Origin，且不能来自 cross-site 或 same-site 页面。请求体上限为 64 字节。不返回 CORS 头、私有仓库地址、上游错误正文、运行 URL 或令牌。
 

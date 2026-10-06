@@ -181,10 +181,26 @@ def publish_site_data(root, dataset, destination, updated_at):
         write_text(hosts_path, destination['known_hosts'].strip() + '\n')
         result = command(['ssh', '-T', '-i', str(key_path), '-p', str(port), '-o', 'IdentitiesOnly=yes', '-o', 'BatchMode=yes',
                  '-o', 'StrictHostKeyChecking=yes', '-o', f'UserKnownHostsFile={hosts_path}',
-                 f'{user}@{host}', 'publish-map'], data=body, timeout=120)
-        if result.stdout.decode().strip() != 'Published public map ' + digest:
-            raise ValueError('服务器发布回执与地图数据不一致')
-    return digest
+                 f'{user}@{host}', 'publish-map'], data=body, timeout=120, check=False)
+        if result.returncode:
+            raise CommandFailure(['ssh', '-T'], result)
+        prefix = 'Public map receipt: '
+        reply = result.stdout.decode().strip()
+        if not reply.startswith(prefix):
+            raise ValueError('服务器发布回执无效')
+        receipt = json.loads(reply[len(prefix):])
+        if not isinstance(receipt, dict) or set(receipt) != {'status', 'reason', 'sha256', 'updated_at', 'requested_updated_at'} or not re.fullmatch(r'[a-f0-9]{64}', receipt.get('sha256', '')) or receipt.get('requested_updated_at') != public['updated_at']:
+            raise ValueError('服务器发布回执无效')
+        if receipt['status'] == 'skipped_older':
+            if receipt['reason'] != 'current_is_newer' or datetime.fromisoformat(receipt['updated_at'].replace('Z', '+00:00')) <= datetime.fromisoformat(public['updated_at'].replace('Z', '+00:00')):
+                raise ValueError('服务器拒旧回执无效')
+        elif receipt['status'] in ('published', 'unchanged'):
+            if receipt['sha256'] != digest or receipt['updated_at'] != public['updated_at']:
+                raise ValueError('服务器发布回执与地图数据不一致')
+        else:
+            raise ValueError('服务器发布回执状态无效')
+        print('Site receipt: ' + json.dumps(receipt, sort_keys=True))
+        return receipt
 
 
 def execute_worker(payload, key, session, settings, root, *, force=False, publish_only=False, source=None, now=None):
@@ -236,6 +252,15 @@ def execute_worker(payload, key, session, settings, root, *, force=False, publis
 def worker(root):
     # Every failure message is fixed text; never print upstream bodies, secret envs or tracebacks.
     settings = read_json(root / 'sync-settings.json')
+    public_request = os.environ.get('SYNC_PUBLIC_REQUEST_ID', '')
+    if public_request:
+        if not re.fullmatch(r'[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}', public_request):
+            raise ValueError('公开更新请求标识无效')
+        if os.environ.get('SYNC_FORCE', '').lower() != 'true' or os.environ.get('SYNC_PUBLISH_ONLY', '').lower() == 'true':
+            raise ValueError('公开更新必须执行采集')
+        destinations = settings.get('publish_repos', [])
+        if not settings.get('enabled', True) or not settings.get('site') or len(destinations) != 2 or len({item.get('repo') for item in destinations}) != 2:
+            raise ValueError('公开更新需要启用同步、网站和两个图片目标')
     command(['git', 'fetch', '--depth', '1', 'origin', 'state'], cwd=root)
     blob = command(['git', 'show', 'FETCH_HEAD:state.enc'], cwd=root).stdout
     key = os.environ['CLOUD_STATE_KEY'].encode()
@@ -255,11 +280,13 @@ def worker(root):
             shutil.copyfile(root / 'github-known-hosts', temporary / 'known-hosts')
             publish_image(temporary, image, settings.get('publish_repos', []))
             if settings.get('site'):
-                updated['files']['sessions/schedule-state.json']['site_sha256'] = publish_site_data(temporary, datasets[0], settings['site'], updated['files']['sessions/schedule-state.json']['last_success'])
+                receipt = publish_site_data(temporary, datasets[0], settings['site'], updated['files']['sessions/schedule-state.json']['last_success'])
+                state = updated['files']['sessions/schedule-state.json']
+                state.update(site_sha256=receipt['sha256'], site_publication_status=receipt['status'], site_data_updated_at=receipt['updated_at'], site_checked_at=datetime.now(timezone.utc).isoformat())
             publication = updated['files']['sessions/schedule-state.json']
             publication['publication_pending'] = False
             publication.pop('publication_error', None)
-            if settings.get('site'):
+            if settings.get('site') and receipt['status'] == 'published':
                 publication['site_published_at'] = datetime.now(timezone.utc).isoformat()
             if settings.get('publish_repos'):
                 publication['image_published_at'] = datetime.now(timezone.utc).isoformat()
@@ -279,7 +306,7 @@ def worker(root):
              'commit', '-m', 'Update encrypted sync state'], cwd=output)
     command(['git', 'push', 'origin', 'HEAD:state'], cwd=output)
     state = updated['files'].get('sessions/schedule-state.json', {})
-    print('Publication receipt: ' + json.dumps({'mode': 'publish_only' if publish_only else 'sync', 'last_success_before': previous_success, 'last_success_after': state.get('last_success'), 'publication_pending': state.get('publication_pending'), 'site_sha256': state.get('site_sha256')}))
+    print('Publication receipt: ' + json.dumps({'mode': 'publish_only' if publish_only else 'sync', 'last_success_before': previous_success, 'last_success_after': state.get('last_success'), 'publication_pending': state.get('publication_pending'), 'site_sha256': state.get('site_sha256'), 'site_status': state.get('site_publication_status'), 'site_updated_at': state.get('site_data_updated_at')}))
     print('Encrypted checkpoint saved. Only configured display outputs were published.')
     return code
 

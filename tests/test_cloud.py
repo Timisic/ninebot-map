@@ -79,7 +79,7 @@ class CloudTests(unittest.TestCase):
                         (root / 'work/state-publish').mkdir(parents=True)
                     return subprocess.CompletedProcess(args, 0, stdout=seal(self.payload, self.key) if args[:2] == ['git', 'show'] else b'', stderr=b'')
                 log = io.StringIO()
-                with patch.dict('os.environ', {'CLOUD_STATE_KEY': self.key.decode(), 'NINEBOT_SESSION': 'not JSON' if publish_only else json.dumps(self.session), 'SYNC_FORCE': 'false', 'SYNC_PUBLISH_ONLY': str(publish_only).lower()}), patch('nbmap.cloud.command', side_effect=git), patch('nbmap.cloud.execute_worker', return_value=(updated, 0, [self.archive.path / 'prepared/dataset.json'])) as executor, patch('nbmap.cloud.publish_image'), patch('nbmap.cloud.publish_site_data', return_value='a' * 64, side_effect=RuntimeError('PRIVATE_SENTINEL') if failure else None), redirect_stdout(log):
+                with patch.dict('os.environ', {'CLOUD_STATE_KEY': self.key.decode(), 'NINEBOT_SESSION': 'not JSON' if publish_only else json.dumps(self.session), 'SYNC_FORCE': 'false', 'SYNC_PUBLISH_ONLY': str(publish_only).lower()}), patch('nbmap.cloud.command', side_effect=git), patch('nbmap.cloud.execute_worker', return_value=(updated, 0, [self.archive.path / 'prepared/dataset.json'])) as executor, patch('nbmap.cloud.publish_image'), patch('nbmap.cloud.publish_site_data', return_value={'status':'published','sha256':'a' * 64,'updated_at':NOW.isoformat()}, side_effect=RuntimeError('PRIVATE_SENTINEL') if failure else None), redirect_stdout(log):
                     self.assertEqual(worker(root), 1 if failure else 0)
                 state = unseal((root / 'work/state-publish/state.enc').read_bytes(), self.key)['files']['sessions/schedule-state.json']
                 self.assertEqual(state['last_success'], NOW.isoformat())
@@ -315,7 +315,8 @@ class CloudTests(unittest.TestCase):
         dataset = read_json(self.archive.path / 'prepared/dataset.json')
         path = render_tracks(dataset, self.root / 'tracks.png')
         with Image.open(path) as image:
-            self.assertEqual(image.size, (1200, 900))
+            self.assertLessEqual(image.width, 1200)
+            self.assertLessEqual(image.height, 900)
             self.assertEqual(image.info, {})
             self.assertGreater(len(image.getcolors(image.width * image.height)), 1)
         original = '# Existing project\n\nKeep this text.\n'

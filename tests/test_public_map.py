@@ -94,11 +94,25 @@ class PublicMapTests(unittest.TestCase):
             original = target.read_bytes()
             old = copy.deepcopy(data)
             old['updated_at'] = '2020-01-01T00:00:00Z'
-            for payload in [old, {**data, 'tokens': 'PRIVATE_SENTINEL'}]:
-                result = send(payload)
-                self.assertEqual(result.returncode, 1)
-                self.assertNotIn(b'PRIVATE_SENTINEL', result.stderr)
-                self.assertEqual(target.read_bytes(), original)
+            old['tracks'][0]['points'][0][0] += .0001
+            result = send(old)
+            self.assertEqual(result.returncode, 0)
+            receipt = json.loads(result.stdout.decode().split('Public map receipt: ')[1])
+            self.assertEqual(receipt['status'], 'skipped_older')
+            self.assertEqual(receipt['reason'], 'current_is_newer')
+            self.assertEqual(target.read_bytes(), original)
+            receipt = json.loads(send(data).stdout.decode().split('Public map receipt: ')[1])
+            self.assertEqual(receipt['status'], 'unchanged')
+            self.assertEqual(target.read_bytes(), original)
+            result = send({**data, 'tokens': 'PRIVATE_SENTINEL'})
+            self.assertEqual(result.returncode, 1)
+            self.assertNotIn(b'PRIVATE_SENTINEL', result.stderr)
+            self.assertEqual(target.read_bytes(), original)
+            newer = copy.deepcopy(data)
+            newer['updated_at'] = '2026-10-05T08:00:00Z'
+            receipt = json.loads(send(newer).stdout.decode().split('Public map receipt: ')[1])
+            self.assertEqual(receipt['status'], 'published')
+            self.assertEqual(json.loads(target.read_bytes())['updated_at'], newer['updated_at'])
 
     def test_loopback_static_server_allows_only_get_head_and_exported_paths(self):
         spec = importlib.util.spec_from_file_location('static_map_server', 'scripts/serve-public-map.py')
@@ -154,7 +168,7 @@ class PublicMapTests(unittest.TestCase):
                 self.assertEqual(key_path.stat().st_mode & 0o777, 0o600)
                 validate_public(json.loads(kwargs['data']))
                 self.assertNotIn(b'snapshot_ids', kwargs['data'])
-                return subprocess.CompletedProcess(args, 0, stdout=('Published public map ' + hashlib.sha256(kwargs['data']).hexdigest() + '\n').encode(), stderr=b'')
+                return subprocess.CompletedProcess(args, 0, stdout=('Public map receipt: ' + json.dumps({'status':'published','reason':'accepted','sha256':hashlib.sha256(kwargs['data']).hexdigest(),'updated_at':'2026-10-05T08:00:00Z','requested_updated_at':'2026-10-05T08:00:00Z'}) + '\n').encode(), stderr=b'')
             with patch.dict('os.environ', {'MAP_DEPLOY_KEY': 'synthetic-secret'}), patch('nbmap.cloud.command', side_effect=send):
                 publish_site_data(root, source, {'host': 'example.invalid', 'user': 'map', 'known_hosts': 'synthetic public host key'}, '2026-10-05T08:00:00Z')
             self.assertEqual(len(calls), 1)
@@ -182,7 +196,7 @@ class PublicMapTests(unittest.TestCase):
                 return result
             with patch.dict('os.environ', {'MAP_DEPLOY_KEY': 'synthetic-secret'}), patch('nbmap.cloud.command', side_effect=receive):
                 receipt = publish_site_data(sender, source, {'host': 'example.invalid', 'user': 'map', 'known_hosts': 'synthetic public host key'}, '2026-10-05T08:00:00Z')
-            self.assertEqual(receipt, hashlib.sha256(target.read_bytes()).hexdigest())
+            self.assertEqual(receipt['sha256'], hashlib.sha256(target.read_bytes()).hexdigest())
             self.assertEqual(json.loads(target.read_bytes())['updated_at'], '2026-10-05T08:00:00Z')
             self.assertEqual(list(sender.iterdir()), [source])
 

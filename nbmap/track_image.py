@@ -1,14 +1,14 @@
 """Render only sampled tracks to a PNG, without a basemap or geographic metadata."""
 import math
 from pathlib import Path
-from PIL import Image, ImageDraw
+from PIL import Image, ImageChops, ImageDraw
 from .dataset import validate_dataset
 
 
 def render_tracks(dataset, path, width=1200, height=900):
     validate_dataset(dataset)
     points = [p for t in dataset['tracks'] for p in t['points']]
-    scale, margin = 3, 45
+    scale, margin = 3, 16
     image = Image.new('RGB', (width * scale, height * scale), '#f8faf8')
     if points:
         lon0 = sum(p['longitude'] for p in points) / len(points)
@@ -32,5 +32,10 @@ def render_tracks(dataset, path, width=1200, height=900):
                     draw.line([pixel(first), pixel(second)], fill=(36, 124, 91, 105), width=2 * scale)
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    image.resize((width, height), Image.Resampling.LANCZOS).save(path, format='PNG', optimize=True)
+    bounds = ImageChops.difference(image, Image.new('RGB', image.size, '#f8faf8')).getbbox()
+    if bounds:
+        padding = margin * scale
+        image = image.crop((max(0, bounds[0] - padding), max(0, bounds[1] - padding),
+                            min(image.width, bounds[2] + padding), min(image.height, bounds[3] + padding)))
+    image.resize((math.ceil(image.width / scale), math.ceil(image.height / scale)), Image.Resampling.LANCZOS).save(path, format='PNG', optimize=True)
     return path

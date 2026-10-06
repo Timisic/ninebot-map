@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Serve allowlisted map assets and optional public Actions updates on loopback."""
 import argparse
 import hashlib
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer

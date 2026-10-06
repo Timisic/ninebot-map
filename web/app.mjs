@@ -12,8 +12,6 @@ const routeLayer = createRouteLayer(map), markers = L.layerGroup().addTo(map);
 let state = { phase: 'idle', model: null, view: null, selected: null, editing: null, labels: {}, storageKey: null };
 let tiles = null, importVersion = 0;
 let serverRevision = null, refreshBusy = false, refreshTimer = null;
-/** @typedef {'light' | 'dark' | 'system'} ThemePreference */
-/** @type {ThemePreference} */
 let themePreference = document.documentElement.dataset.themePreference || 'system';
 const systemTheme = matchMedia('(prefers-color-scheme: dark)');
 let theme;
@@ -203,9 +201,6 @@ function showCell(event) {
 }
 map.on('mousemove click', showCell); map.on('mouseout', () => { $('cell-info').hidden = true; });
 
-/** @typedef {'idle' | 'queued' | 'running' | 'succeeded' | 'failed' | 'unknown' | 'unavailable'} UpdatePhase */
-/** @typedef {{ phase: UpdatePhase, canRequest: boolean, requestedAt: string | null, nextAllowedAt: string | null, request: 'idle' | 'reading' | 'dispatching', timer: number | null }} UpdateState */
-/** @type {UpdateState} */
 let updateState = { phase: 'unavailable', canRequest: false, requestedAt: null, nextAllowedAt: null, request: 'idle', timer: null };
 let hintTimer;
 function hideHint() { clearTimeout(hintTimer); $('inline-hint').hidden = true; }

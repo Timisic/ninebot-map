@@ -11,8 +11,6 @@ Environment=PYTHONDONTWRITEBYTECODE=1
 StateDirectory=along-map-update
 StateDirectoryMode=0700
 UMask=0077
-# Enable after provisioning the repository-scoped Actions credential.
-# LoadCredential=github-token:/etc/along-map/github-token
 Restart=on-failure
 RestartSec=5
 NoNewPrivileges=true

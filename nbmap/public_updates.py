@@ -1,4 +1,3 @@
-"""Durable public admission and read-only reconciliation of private Actions runs."""
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 import fcntl

@@ -12,7 +12,7 @@ A user keeps the map open while local data changes, or requests a public update 
 - `update-failure` retains the map when dispatch is rejected or the service is unavailable.
 - `local-unavailable` disables the public update button on a local 404 without a page error.
 
-## How to get to it
+## How to get to it (user POV)
 
 Open `./run map --dataset <file>`, replace that local file with standard data, and return the page to the foreground. A configured public site exposes its update button at the upper left.
 

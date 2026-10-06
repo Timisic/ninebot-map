@@ -23,14 +23,14 @@ The refresh harness also performs a read-only HTTP doctor on its owned instance 
 
 - `npm run verify:smoke` checks project layout and the real local map refresh path.
 - `npm run verify` runs project structure, Python, model, browser, wheel and refresh suites.
-- `npm run verify -- --suite map` covers endpoint loading, date filtering, labels, themes and basemap behavior.
+- `npm run verify -- --suite map` covers endpoint loading, activity navigation, labels, system theme and basemap behavior.
 - `npm run verify -- --suite wheel` covers production wheel handling at two device pixel ratios.
-- `npm run verify -- --suite refresh` covers valid updates, preserved controls, invalid replacement and read-only data ownership.
+- `npm run verify -- --suite refresh` covers valid updates, preserved controls, invalid replacement and public-update UI responses.
 - `npm run verify -- --suite static` covers public export, relative resource paths, no-import UI, no-ETag refresh and rejected uploads.
 - `npm run verify -- --suite python` covers collector, local server, scheduler and cloud behavior with synthetic adapters.
 - `npm run verify -- --suite model` covers route, grid and destination calculations.
 
-Use existing selectors and actions in the harnesses. The refresh recipe fills `#from` and `#to`, toggles `#show-grid`, saves a name through `#label-form`, replaces its synthetic source file, and brings the page to the foreground. It reads `#history-stat`, `#visible-stat`, the controls and the saved name afterward.
+Use existing selectors and actions in the harnesses. The refresh recipe toggles `#show-grid`, saves a name through `#label-form`, replaces its synthetic source file, and brings the page to the foreground. It reads `#history-stat`, `#visible-stat`, the controls and the saved name afterward. Public-update fixtures use `#update-map` and the same hint as `#running`; the Python suite proves the global cooldown and HTTP boundary with synthetic Actions responses.
 
 ## Evidence
 
