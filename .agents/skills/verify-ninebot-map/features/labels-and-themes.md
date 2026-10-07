@@ -10,6 +10,7 @@ A user opens the destination list, names a place and switches themes while retai
 - `local-font` loads the actual local Smiley Sans face and preserves 11px statistics.
 - `place-stable` keeps the same selection on repeat click, map click and zoom.
 - `drawer-retain` preserves draft and selection on close/reopen without shrinking the list.
+- `shared-places` uses published `place_annotations` as authority across devices, including an empty object. Old browser labels and merges stay stored but are ignored. Public edit controls are hidden and event handlers cannot write. Shared refresh applies revised names and drops local drafts. Raw datasets and legacy public files retain local editing.
 - `label-save` retains a saved name after a page reload. Named pins are independent of the list's first 100 places.
 - `place-merge` explicitly combines source and target historical memberships. Renaming and clearing a name include temporarily absent historical members and do not undo the merge. Equal names alone remain separate.
 - `activity-days` counts unique riding dates across every named badminton venue. Same-day returns and multiple venues count once. Names containing 🏸 use the racket in both the list and map.
@@ -41,3 +42,5 @@ Use `#merge-place`, `#merge-target`, and `#merge-form` to merge two places, then
 - General destination counts mean observed track endpoints. Badminton row counts use unique riding days. Neither confirms a person was present.
 - Stored names are keyed by dataset, coordinate interpretation and historical ride membership.
 - A test of saved names does not prove preservation of an unsaved draft; both actions are exercised.
+
+Run `npm run verify -- --suite static` for two fresh desktop and mobile contexts with shared synthetic names, merged endpoints and badminton days. Inject conflicting localStorage into one context and reload. Require the same shared result and unchanged stored values. Refresh names in both contexts, then publish empty annotations and require unnamed places. Retain `shared-places.json` and the two screenshots. The Python suite also proves private reinstallation and publication preserve configured annotations.

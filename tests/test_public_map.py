@@ -48,6 +48,32 @@ class PublicMapTests(unittest.TestCase):
         self.assertEqual(result['tracks'][0]['points'][0], [self.dataset['tracks'][0]['points'][0]['longitude'], self.dataset['tracks'][0]['points'][0]['latitude']])
         self.assertRegex(result['tracks'][0]['date'], r'^\d{4}-\d{2}-\d{2}$')
 
+    def test_published_place_annotations_are_explicit_and_retain_historical_members(self):
+        first, absent = 'r_' + 'a' * 24, 'r_' + 'b' * 24
+        annotations = {'labels': {first: '合成球馆🏸', absent: '🏸' * 40},
+                       'merges': [{'anchorId': first, 'memberIds': [first, absent]}]}
+        self.dataset['place_annotations'] = annotations
+        self.assertNotIn('place_annotations', public_dataset(self.dataset))
+        self.assertEqual(public_dataset(self.dataset, place_annotations=annotations)['place_annotations'], annotations)
+        self.assertEqual(public_dataset(self.dataset, place_annotations={})['place_annotations'], {})
+        c1_name = {'labels': {first: '\u0085合成球馆'}}
+        self.assertEqual(public_dataset(self.dataset, place_annotations=c1_name)['place_annotations'], c1_name)
+        broken = [None, [], {'unknown': True}, {'labels': []}, {'labels': {'private-id': 'name'}},
+                  {'labels': {first: ''}}, {'labels': {first: '\ufeff合成球馆'}}, {'labels': {first + '\n': 'name'}}, {'labels': {first: ' leading'}}, {'labels': {first: '🏸' * 41}},
+                  {'merges': {}}, {'merges': [{'anchorId': first, 'memberIds': [first]}]},
+                  {'merges': [{'anchorId': first, 'memberIds': [first, first]}]},
+                  {'merges': [{'anchorId': first, 'memberIds': [absent, 'r_' + 'c' * 24]}]},
+                  {'merges': [{'anchorId': first, 'memberIds': [first, 'private-id']}]},
+                  {'merges': [{'anchorId': first, 'memberIds': [first, absent], 'private': True}]}]
+        group = {'anchorId': first, 'memberIds': [first, absent]}
+        broken.append({'merges': [group] * 12501})
+        for annotations in broken:
+            with self.subTest(annotations=str(annotations)[:120]):
+                data = public_dataset(self.dataset)
+                data['place_annotations'] = annotations
+                with self.assertRaises(ValueError):
+                    validate_public(data)
+
     def test_public_summary_includes_excluded_history_without_individual_records(self):
         ride = self.dataset['rides'][0]
         track = next(t for t in self.dataset['tracks'] if t['ride_id'] == ride['id'])
@@ -285,6 +311,7 @@ class PublicMapTests(unittest.TestCase):
             root = Path(directory)
             source = root / 'private-dataset.json'
             source.write_text(json.dumps(self.dataset))
+            annotations = {'labels': {'r_' + 'a' * 24: '合成球馆🏸'}, 'merges': []}
             calls = []
             def send(args, **kwargs):
                 calls.append((args, kwargs))
@@ -292,10 +319,11 @@ class PublicMapTests(unittest.TestCase):
                 self.assertTrue(key_path.exists())
                 self.assertEqual(key_path.stat().st_mode & 0o777, 0o600)
                 validate_public(json.loads(kwargs['data']))
+                self.assertEqual(json.loads(kwargs['data'])['place_annotations'], annotations)
                 self.assertNotIn(b'snapshot_ids', kwargs['data'])
                 return subprocess.CompletedProcess(args, 0, stdout=('Public map receipt: ' + json.dumps({'status':'published','reason':'accepted','sha256':hashlib.sha256(kwargs['data']).hexdigest(),'updated_at':'2026-10-05T08:00:00Z','requested_updated_at':'2026-10-05T08:00:00Z'}) + '\n').encode(), stderr=b'')
             with patch.dict('os.environ', {'MAP_DEPLOY_KEY': 'synthetic-secret'}), patch('nbmap.cloud.command', side_effect=send):
-                publish_site_data(root, source, {'host': 'example.invalid', 'user': 'map', 'known_hosts': 'synthetic public host key'}, '2026-10-05T08:00:00Z')
+                publish_site_data(root, source, {'host': 'example.invalid', 'user': 'map', 'known_hosts': 'synthetic public host key', 'place_annotations': annotations}, '2026-10-05T08:00:00Z')
             self.assertEqual(len(calls), 1)
             self.assertIn('StrictHostKeyChecking=yes', calls[0][0])
             self.assertEqual(calls[0][0][-1], 'publish-map')

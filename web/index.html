@@ -33,10 +33,11 @@
     <section class="place-detail" aria-label="所选地点" hidden>
       <p id="selection-empty">选择地点，查看相关路线。</p>
       <div id="selection-summary" hidden><div class="selection-heading"><strong id="selection-name"></strong><button id="clear-selection" type="button" class="text-button">取消选择</button></div><p id="selection-count"></p><div class="detail-actions"><button id="locate-place" type="button">在地图中定位</button><button id="edit-place" type="button">命名</button><button id="merge-place" type="button">合并地点</button></div></div>
+      <p id="shared-place-note" hidden>地点名称由地图发布者统一维护，所有设备一致。</p>
       <form id="label-form" hidden><label for="place-label">地点名称</label><div class="label-row"><input id="place-label" maxlength="40" autocomplete="off"><button type="submit">保存</button><button id="cancel-edit" type="button">取消</button></div><p id="label-note" role="status"></p></form>
       <form id="merge-form" hidden><label for="merge-target">将所选地点合并到</label><div class="label-row"><select id="merge-target" required></select><button type="submit">合并</button><button id="cancel-merge" type="button">取消</button></div></form>
     </section>
-    <details class="place-method"><summary>统计口径</summary><p>每条轨迹的终点计一次，在约 100 米范围内聚合。它表示行程结束。含 🏸 的命名地点合计按骑行日去重。自然时长依据相邻骑行估算车辆停放，不代表人的实际停留。名称与地点合并只保存在此浏览器的当前地址。</p></details>
+    <details class="place-method"><summary>统计口径</summary><p>每条轨迹的终点计一次，在约 100 米范围内聚合。它表示行程结束。含 🏸 的命名地点合计按骑行日去重。自然时长依据相邻骑行估算车辆停放，不代表人的实际停留。<span id="place-storage-note">名称与地点合并只保存在此浏览器的当前地址。</span></p></details>
   </aside>
   <section id="empty" class="empty-state" hidden><h2 id="empty-title">地图数据尚未发布</h2><p id="empty-description">数据就绪后会自动显示，请稍后刷新。</p></section>
   <div class="map-settings">

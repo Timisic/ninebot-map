@@ -238,6 +238,32 @@ class CloudTests(unittest.TestCase):
                     self.assertIn('云端定时执行：未启用。', text)
                     self.assertNotIn('下次到期', text)
 
+    def test_reinstall_preserves_site_annotations_without_copying_another_repos_site(self):
+        from nbmap.cloud import setup
+        site = {'host': 'map.example.invalid', 'user': 'map', 'place_annotations': {'labels': {'r_' + 'a' * 24: '合成球馆🏸'}}}
+        repo = 'synthetic/private'
+        folder = self.root / 'work/github-actions' / hashlib.sha256(repo.encode()).hexdigest()[:12]
+        (self.config / 'cloud-state.key').write_bytes(self.key)
+        for source in ('local', 'checkout', 'other-repo'):
+            with self.subTest(source=source):
+                previous = {'repo': repo if source != 'other-repo' else 'synthetic/other', 'site': site}
+                if source == 'checkout':
+                    del previous['site']
+                write_json(self.config / 'cloud.json', previous)
+                write_json(folder / 'sync-settings.json', {'site': site} if source == 'checkout' else {})
+                success = subprocess.CompletedProcess([], 0, stdout=b'', stderr=b'')
+                with patch('nbmap.cloud.gh_json', return_value={'login': 'synthetic'}), patch('nbmap.cloud.bootstrap', return_value=self.session), patch('nbmap.cloud.command', return_value=success), patch('nbmap.cloud.private_repo'), patch('nbmap.cloud.secret'), patch('nbmap.cloud.deploy_code') as deploy, redirect_stdout(io.StringIO()):
+                    self.assertEqual(setup(self.config, self.data, self.root, repo=repo, interval_days=3, publish_repos=[]), 0)
+                settings = deploy.call_args.args[3]
+                local = read_json(self.config / 'cloud.json')
+                self.assertEqual(settings['interval_days'], 3)
+                if source == 'other-repo':
+                    self.assertNotIn('site', settings)
+                    self.assertNotIn('site', local)
+                else:
+                    self.assertEqual(settings['site'], site)
+                    self.assertEqual(local['site'], site)
+
     def test_private_deploy_keeps_project_skills_and_relocated_docs(self):
         source = Path(__file__).resolve().parents[1]
         destination = self.root / 'deploy'

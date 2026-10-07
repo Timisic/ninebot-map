@@ -26,7 +26,7 @@ The refresh harness also performs a read-only HTTP doctor on its owned instance 
 - `npm run verify -- --suite map` runs both map and startup suites, covering endpoint loading, startup failures, activity navigation, labels, system theme and basemap behavior. The existing browser CI job uses this group.
 - `npm run verify -- --suite wheel` covers production wheel handling at two device pixel ratios.
 - `npm run verify -- --suite refresh` covers valid updates, preserved controls, invalid replacement and public-update UI responses.
-- `npm run verify -- --suite static` covers public export, relative resource paths, no-import UI, no-ETag refresh and rejected uploads.
+- `npm run verify -- --suite static` covers public export, relative resource paths, no-import UI, no-ETag refresh, shared published names and merges across devices, stale browser storage, and rejected uploads.
 - `npm run verify -- --suite startup` covers one early dataset fetch, truthful loading and failures, zero tracks, nested exports, module reuse, validated ETags, and closed-page cleanup.
 - `npm run verify -- --suite python` covers collector, local server, scheduler and cloud behavior with synthetic adapters.
 - `npm run verify -- --suite model` covers route, grid and destination calculations.

@@ -173,7 +173,7 @@ def publish_site_data(root, dataset, destination, updated_at):
     key = os.environ.get('MAP_DEPLOY_KEY', '')
     if not key or not destination.get('known_hosts'):
         raise ValueError('静态发布缺少专用密钥或已核对的主机公钥')
-    public = public_dataset(read_json(dataset), updated_at)
+    public = public_dataset(read_json(dataset), updated_at, destination.get('place_annotations'))
     body = json.dumps(public, ensure_ascii=False, allow_nan=False, sort_keys=True, separators=(',', ':')).encode()
     digest = hashlib.sha256(body).hexdigest()
     with tempfile.TemporaryDirectory(prefix='site-publish-', dir=root) as directory:
@@ -392,6 +392,12 @@ def setup(config, data, root, *, repo=None, interval_days=None, publish_repos=No
     suffix = hashlib.sha256(repo.encode()).hexdigest()[:12]
     folder = private_dir(root / 'work' / 'github-actions' / suffix)
     settings = {'enabled': True, 'interval_days': interval, 'publish_repos': destinations}
+    existing_settings = folder / 'sync-settings.json'
+    configured_site = previous.get('site') if previous.get('repo') == repo else None
+    if configured_site is None and existing_settings.exists():
+        configured_site = read_json(existing_settings).get('site')
+    if configured_site is not None:
+        settings['site'] = configured_site
     # Seed once, before scheduling. Existing cloud history is never reset on reinstall.
     branch = command(['gh', 'api', 'repos/' + repo + '/git/ref/heads/state'], check=False)
     if branch.returncode:
@@ -407,7 +413,10 @@ def setup(config, data, root, *, repo=None, interval_days=None, publish_repos=No
         command(['git', 'push', '-u', 'origin', 'state'], cwd=seed)
     deploy_code(root, folder, repo, settings)
     command(['gh', 'api', 'repos/' + repo, '--method', 'PATCH', '-f', 'default_branch=main'])
-    write_json(path, {'repo': repo, 'interval_days': interval, 'publish_repos': destinations})
+    local_settings = {'repo': repo, 'interval_days': interval, 'publish_repos': destinations}
+    if configured_site is not None:
+        local_settings['site'] = configured_site
+    write_json(path, local_settings)
     command(['gh', 'workflow', 'enable', 'sync.yml', '--repo', repo])
     print('私有 Actions 已配置：' + repo + '；本机没有定时后台任务。')
     return 0

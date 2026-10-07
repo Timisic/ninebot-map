@@ -15,11 +15,12 @@ from .map_server import MAX_BYTES
 from .viewer_resources import WEB_ROOT, viewer_resources
 
 FORMAT = 'public-ride-map'
+NAME_TRIM_CHARACTERS = '\u0009\u000a\u000b\u000c\u000d\u0020\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff'
 SUMMARY_FIELDS = {'ride_count', 'total_distance_m', 'known_distance_m', 'missing_distance_count',
                   'reported_month_distance_m', 'map_ride_count', 'map_distance_m', 'map_point_count', 'map_exclusions'}
 
 
-def public_dataset(dataset, updated_at=None):
+def public_dataset(dataset, updated_at=None, place_annotations=None):
     validate_dataset(dataset)
     zone = ZoneInfo(dataset['timezone'])
     rides = {ride['id']: ride for ride in dataset['rides']}
@@ -34,6 +35,8 @@ def public_dataset(dataset, updated_at=None):
                                 'date': datetime.fromisoformat(ride['started_at']).astimezone(zone).date().isoformat(),
                                 'distance_m': ride['distance_m'], 'stop_duration_s': stops[ride['id']],
                                 'points': [[point['longitude'], point['latitude']] for point in track['points']]})
+    if place_annotations is not None:
+        result['place_annotations'] = place_annotations
     validate_public(result)
     return result
 
@@ -47,8 +50,23 @@ def validate_public(data):
         return (nullable and value is None) or (type(value) in (int, float) and isfinite(value) and value >= 0)
     def integer(value):
         return type(value) is int and 0 <= value <= 9007199254740991
-    require(isinstance(data, dict) and set(data) == {'format', 'schema_version', 'dataset_id', 'updated_at',
-            'timezone', 'coordinate_system', 'summary', 'tracks'}, '公开地图字段不符合白名单')
+    fields = {'format', 'schema_version', 'dataset_id', 'updated_at', 'timezone', 'coordinate_system', 'summary', 'tracks'}
+    require(isinstance(data, dict) and fields <= set(data) <= fields | {'place_annotations'}, '公开地图字段不符合白名单')
+    if 'place_annotations' in data:
+        annotations = data['place_annotations']
+        require(isinstance(annotations, dict) and set(annotations) <= {'labels', 'merges'}, '公开地点标注字段无效')
+        labels, merges = annotations.get('labels', {}), annotations.get('merges', [])
+        valid_id = lambda value: isinstance(value, str) and re.fullmatch(r'r_[a-f0-9]{24}', value)
+        require(isinstance(labels, dict) and len(labels) <= 25000, '公开地点名称超限或无效')
+        require(all(valid_id(key) and isinstance(value, str) and value == value.strip(NAME_TRIM_CHARACTERS) and 0 < len(value) <= 40 for key, value in labels.items()), '公开地点名称无效')
+        require(isinstance(merges, list) and len(merges) <= 25000, '公开地点合并超限或无效')
+        member_count = 0
+        for group in merges:
+            require(isinstance(group, dict) and set(group) == {'anchorId', 'memberIds'}, '公开地点合并字段无效')
+            members = group['memberIds']
+            require(isinstance(members, list) and 2 <= len(members) <= 25000 and all(valid_id(value) for value in members), '公开地点合并成员无效')
+            member_count += len(members)
+            require(member_count <= 25000 and len(set(members)) == len(members) and valid_id(group['anchorId']) and group['anchorId'] in members, '公开地点合并锚点、成员重复或总量无效')
     require(data['format'] == FORMAT and type(data['schema_version']) is int and data['schema_version'] == 1 and data['dataset_id'] == 'ninebot-public-map', '公开地图格式无效')
     require(isinstance(data['updated_at'], str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)', data['updated_at']), '更新时间必须使用完整 ISO 8601 格式')
     updated = datetime.fromisoformat(data['updated_at'].replace('Z', '+00:00'))

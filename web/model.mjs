@@ -88,7 +88,27 @@ function validate(data) {
   return computed;
 }
 
+function validatePlaceAnnotations(annotations) {
+  assert(object(annotations) && Object.keys(annotations).every(key => ['labels', 'merges'].includes(key)), '公开地点标注字段无效');
+  const { labels = {}, merges = [] } = annotations;
+  const validId = value => typeof value === 'string' && value.length === 26 && /^r_[a-f0-9]{24}$/.test(value);
+  assert(object(labels) && Object.keys(labels).length <= LIMITS.rides, '公开地点名称超限或无效');
+  assert(Object.entries(labels).every(([id, name]) => validId(id) && typeof name === 'string' && name === name.trim() && [...name].length > 0 && [...name].length <= 40), '公开地点名称无效');
+  assert(Array.isArray(merges) && merges.length <= LIMITS.rides, '公开地点合并超限或无效');
+  let memberCount = 0;
+  for (const group of merges) {
+    assert(object(group) && Object.keys(group).length === 2 && Object.hasOwn(group, 'anchorId') && Object.hasOwn(group, 'memberIds'), '公开地点合并字段无效');
+    const members = group.memberIds;
+    assert(Array.isArray(members) && members.length >= 2 && members.length <= LIMITS.rides && members.every(validId), '公开地点合并成员无效');
+    memberCount += members.length;
+    assert(memberCount <= LIMITS.rides && new Set(members).size === members.length && validId(group.anchorId) && members.includes(group.anchorId), '公开地点合并锚点、成员重复或总量无效');
+  }
+}
+
 function validatePublic(data) {
+  const fields = ['format', 'schema_version', 'dataset_id', 'updated_at', 'timezone', 'coordinate_system', 'summary', 'tracks'];
+  assert(fields.every(key => Object.hasOwn(data, key)) && Object.keys(data).every(key => fields.includes(key) || key === 'place_annotations'), '公开地图字段不符合白名单');
+  if (Object.hasOwn(data, 'place_annotations')) validatePlaceAnnotations(data.place_annotations);
   assert(data.schema_version === 1 && data.dataset_id === 'ninebot-public-map', '公开地图格式无效');
   timestamp(data.updated_at);
   assert(typeof data.timezone === 'string', '缺少 IANA 时区');
@@ -298,6 +318,7 @@ export function readRideMap(input, interpretation) {
   } else data = input;
   const publicMap = object(data) && data.format === 'public-ride-map';
   const totals = Object.freeze(publicMap ? validatePublic(data) : validate(data));
+  const placeAnnotations = publicMap && Object.hasOwn(data, 'place_annotations') ? Object.freeze({ labels: Object.freeze({ ...data.place_annotations.labels }), merges: Object.freeze((data.place_annotations.merges ?? []).map(group => Object.freeze({ anchorId: group.anchorId, memberIds: Object.freeze([...group.memberIds]) }))) }) : null;
   const sourceTracks = publicMap ? data.tracks.map(track => ({ ride_id: track.id, points: track.points.map(([longitude, latitude]) => ({ longitude, latitude })) })) : data.tracks;
   const crs = interpretation ?? data.coordinate_system;
   assert(['unverified', 'wgs84', 'gcj02', 'bd09'].includes(crs), '未知坐标解释');
@@ -348,7 +369,7 @@ export function readRideMap(input, interpretation) {
   }
   const destinations = clusterEndpoints(endpoints);
   const dates = tracks.map(t => t.date).sort();
-  const select = ({ from = '', to = '', labels = {}, merges = [] } = {}) => {
+  const select = ({ from = '', to = '', labels = placeAnnotations?.labels ?? {}, merges = placeAnnotations?.merges ?? [] } = {}) => {
     assert(!from || /^\d{4}-\d{2}-\d{2}$/.test(from), '开始日期无效');
     assert(!to || /^\d{4}-\d{2}-\d{2}$/.test(to), '结束日期无效');
     if (from) timestamp(`${from}T00:00:00Z`);
@@ -370,5 +391,5 @@ export function readRideMap(input, interpretation) {
     }).filter(p => p.count).sort((a, b) => b.count - a.count || a.id.localeCompare(b.id, 'en'));
     return { tracks: visible, passages, destinations: places, badmintonDays: badmintonDays.size, rideCount: visible.length, distance: sum(visible.map(t => t.distance)) };
   };
-  return Object.freeze({ datasetId: data.dataset_id, updatedAt: data.updated_at || data.generated_at, declaredCrs: data.coordinate_system, interpretation: crs, timezone: data.timezone, totals, diagnostics: Object.freeze({ gaps, excluded: totals.ride_count - tracks.length }), dateBounds: Object.freeze([dates[0] || '', dates.at(-1) || '']), destinations, select, cellAt(latitude, longitude) { const xy = project({ latitude, longitude }); return `${Math.floor(xy[0] / GRID_METERS)},${Math.floor(xy[1] / GRID_METERS)}`; }, cellBounds(key) { const [x, y] = key.split(',').map(Number); return [unproject(x * GRID_METERS, y * GRID_METERS), unproject((x + 1) * GRID_METERS, (y + 1) * GRID_METERS)]; } });
+  return Object.freeze({ placeAnnotations, datasetId: data.dataset_id, updatedAt: data.updated_at || data.generated_at, declaredCrs: data.coordinate_system, interpretation: crs, timezone: data.timezone, totals, diagnostics: Object.freeze({ gaps, excluded: totals.ride_count - tracks.length }), dateBounds: Object.freeze([dates[0] || '', dates.at(-1) || '']), destinations, select, cellAt(latitude, longitude) { const xy = project({ latitude, longitude }); return `${Math.floor(xy[0] / GRID_METERS)},${Math.floor(xy[1] / GRID_METERS)}`; }, cellBounds(key) { const [x, y] = key.split(',').map(Number); return [unproject(x * GRID_METERS, y * GRID_METERS), unproject((x + 1) * GRID_METERS, (y + 1) * GRID_METERS)]; } });
 }

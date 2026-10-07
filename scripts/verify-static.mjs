@@ -71,6 +71,67 @@ try{
  assert.equal((await fetch(origin+'/map/dataset.json',{method:'POST',body:'{}'})).status,405);
  assert.deepEqual(external,[]);assert.deepEqual(errors,[]);
  await page.screenshot({path:path.join(output,'static-after.png')});
+ const shared=structuredClone(updated);
+ const memberIds=shared.tracks.slice(0,9).map(track=>track.id);
+ shared.place_annotations={labels:Object.fromEntries(memberIds.map(id=>[id,'合成球馆🏸'])),merges:[{anchorId:memberIds[0],memberIds}]};
+ shared.place_annotations.labels[shared.tracks[11].id]='合成公园';
+ await page.locator('#toggle-places').click();await page.locator('.place-button').first().click();
+ await page.locator('#edit-place').click();await page.locator('#place-label').fill('尚未保存的旧草稿');
+ const oldStorage=await page.evaluate(()=>Object.fromEntries(Object.entries(localStorage).filter(([key])=>key.startsWith('ride-map-labels:'))));
+ const labelKey=Object.keys(oldStorage).find(key=>!key.endsWith(':merges'));
+ assert.ok(labelKey);
+ await fs.writeFile(path.join(site,'dataset.json'),JSON.stringify(shared));
+ assert.equal((await fetch(origin+'/map/dataset.json')).status,200);
+ await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+ await page.waitForFunction(()=>document.querySelector('.place-name').textContent==='合成球馆🏸');
+ assert.equal(await page.locator('#label-form').isVisible(),false);
+ assert.equal(await page.locator('#place-label').inputValue(),'');
+ assert.deepEqual(await page.evaluate(()=>Object.fromEntries(Object.entries(localStorage).filter(([key])=>key.startsWith('ride-map-labels:')))),oldStorage);
+ const sharedContexts=[];
+ const sharedPages=[];
+ for(const viewport of [{width:1280,height:800},{width:390,height:844}]){
+  const context=await browser.newContext({viewport});sharedContexts.push(context);
+  const device=await context.newPage();sharedPages.push(device);
+  device.on('pageerror',error=>errors.push(error.message));
+  await device.route('**/*',route=>route.request().url().startsWith(origin)?route.continue():route.abort());
+  await device.goto(origin+'/map/');
+  await device.waitForFunction(()=>document.querySelector('.place-name').textContent==='合成球馆🏸');
+  await device.locator('#toggle-places').click();await device.locator('.place-button').first().click();
+  assert.equal(await device.locator('.place-button').count(),3);
+  assert.match(await device.locator('#selection-count').textContent(),/9 次行程终点 · 9 个骑行日/);
+  assert.equal((await device.locator('#badminton-stat').textContent()).trim(),'9 次');
+  assert.equal(await device.locator('.destination-marker').count(),2);
+  assert.equal(await device.locator('#shared-place-note').isVisible(),true);
+  for(const id of ['edit-place','merge-place','label-form','merge-form'])assert.equal(await device.locator('#'+id).isVisible(),false);
+  await device.evaluate(()=>{document.querySelector('#edit-place').click();document.querySelector('#merge-place').click();document.querySelector('#label-form').dispatchEvent(new Event('submit',{cancelable:true}));document.querySelector('#merge-form').dispatchEvent(new Event('submit',{cancelable:true}));});
+  assert.equal(await device.locator('#label-form').isVisible(),false);
+  assert.equal(await device.locator('#merge-form').isVisible(),false);
+  assert.equal(await device.evaluate(()=>Object.keys(localStorage).filter(key=>key.startsWith('ride-map-labels:')).length),0);
+  await device.screenshot({path:path.join(output,`shared-${viewport.width}.png`)});
+ }
+ const stale={labels:{[memberIds[0]]:'浏览器旧名称'},merges:[{anchorId:memberIds[0],memberIds:shared.tracks.map(track=>track.id)}]};
+ await sharedPages[0].evaluate(({key,stale})=>{localStorage.setItem(key,JSON.stringify(stale.labels));localStorage.setItem(key+':merges',JSON.stringify(stale.merges));},{key:labelKey,stale});
+ await sharedPages[0].reload();await sharedPages[0].waitForFunction(()=>document.querySelector('.place-name').textContent==='合成球馆🏸');
+ assert.equal(await sharedPages[0].locator('.place-button').count(),3);
+ assert.equal((await sharedPages[0].locator('#badminton-stat').textContent()).trim(),'9 次');
+ assert.deepEqual(await sharedPages[0].evaluate(key=>({labels:JSON.parse(localStorage.getItem(key)),merges:JSON.parse(localStorage.getItem(key+':merges'))}),labelKey),stale);
+ const revised=structuredClone(shared);for(const id of memberIds)revised.place_annotations.labels[id]='统一新名称';
+ await fs.writeFile(path.join(site,'dataset.json'),JSON.stringify(revised));
+ for(const device of sharedPages){
+  await device.evaluate(()=>window.dispatchEvent(new Event('focus')));
+  await device.waitForFunction(()=>document.querySelector('.place-name').textContent==='统一新名称');
+  assert.equal((await device.locator('#badminton-stat').textContent()).trim(),'0 次');
+  assert.equal(await device.locator('.place-button').count(),3);
+ }
+ const emptyShared={...revised,place_annotations:{}};
+ await fs.writeFile(path.join(site,'dataset.json'),JSON.stringify(emptyShared));
+ await sharedPages[0].evaluate(()=>window.dispatchEvent(new Event('focus')));
+ await sharedPages[0].waitForFunction(()=>document.querySelectorAll('.place-button').length===4);
+ assert.equal(await sharedPages[0].locator('.destination-marker').count(),0);
+ assert.doesNotMatch(await sharedPages[0].locator('#places').textContent(),/浏览器旧名称/);
+ for(const context of sharedContexts)await context.close();
+ await fs.writeFile(path.join(output,'shared-places.json'),JSON.stringify({passed:true,synthetic:true,freshDevices:2,mergedEndpoints:9,badmintonDays:9,staleStorageIgnoredAndPreserved:true,sharedRefresh:true,emptyAuthority:true,writeControlsUnavailable:true},null,2));
+ await fs.writeFile(path.join(site,'dataset.json'),JSON.stringify(updated));
  const cacheContext=await browser.newContext({viewport:{width:1100,height:800},colorScheme:'dark'});
  const cachedPage=await cacheContext.newPage();
  const cacheErrors=[];cachedPage.on('pageerror',error=>cacheErrors.push(error.message));
@@ -112,6 +173,6 @@ try{
  const cache={withoutRequestInterception:true,cacheControl:'public, max-age=14400',navigation:'normal',old,fresh,oldHash,freshHash,marker,requests:requests.slice(requestOffset)};
  await fs.writeFile(path.join(output,'static-cache.json'),JSON.stringify(cache,null,2));
  await cacheContext.close();
- await fs.writeFile(path.join(output,'static.json'),JSON.stringify({passed:true,synthetic:true,nestedPath:true,withoutETagRefresh:true,invalidReplacementRetainsVisibleMap:true,manualImportAbsent:true,immutableBundleCache:true,defaultLeafletMarker:true,cache,external,errors,requests},null,2));
+ await fs.writeFile(path.join(output,'static.json'),JSON.stringify({passed:true,synthetic:true,nestedPath:true,withoutETagRefresh:true,invalidReplacementRetainsVisibleMap:true,manualImportAbsent:true,immutableBundleCache:true,defaultLeafletMarker:true,sharedPlaces:true,cache,external,errors,requests},null,2));
  console.log('Static map passed: nested paths, no import, no secrets, no-ETag refresh, saved labels, invalid update retention, cached release replacement, and default Leaflet marker.');
 }finally{await browser?.close();await new Promise(resolve=>server.close(resolve));await fs.rm(scratch,{recursive:true,force:true});}

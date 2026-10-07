@@ -201,3 +201,26 @@ test('renaming and clearing a partial merged place also update absent historical
   assert.equal(cleared.destinations[0].named, false);
   assert.equal(cleared.badmintonDays, 0);
 });
+
+test('published place annotations supply shared names and historical merges without changing raw map authority', () => {
+  const ids = ['a', 'b', 'c', 'd'].map(letter => 'r_' + letter.repeat(24));
+  const local = makeDataset(ids.slice(0, 3).map((id, index) => ({ id, xy: [[index * 500, 0], [index * 500 + 100, 0]], date: index === 2 ? '2026-01-02' : '2026-01-01' })));
+  const data = { format: 'public-ride-map', schema_version: 1, dataset_id: 'ninebot-public-map', updated_at: local.generated_at, timezone: local.timezone, coordinate_system: local.coordinate_system, summary: local.summary, tracks: local.tracks.map((track, index) => ({ id: track.ride_id, date: index === 2 ? '2026-01-02' : '2026-01-01', distance_m: 1000, points: track.points.map(point => [point.longitude, point.latitude]) })) };
+  assert.equal(readRideMap(data).placeAnnotations, null);
+  const annotations = { labels: { [ids[0]]: '合成球馆🏸', [ids[2]]: '另一球馆🏸', [ids[3]]: '🏸'.repeat(40) }, merges: [{ anchorId: ids[0], memberIds: [ids[0], ids[1], ids[3]] }] };
+  local.place_annotations = annotations;
+  assert.equal(readRideMap(local).placeAnnotations, null);
+  assert.equal(readRideMap(local).select().badmintonDays, 0);
+  const shared = readRideMap({ ...data, place_annotations: annotations });
+  assert.equal(shared.select().destinations.length, 2);
+  assert.equal(shared.select().destinations[0].label, '合成球馆🏸');
+  assert.equal(shared.select().destinations[0].count, 2);
+  assert.equal(shared.select().badmintonDays, 2);
+  assert.deepEqual(readRideMap({ ...data, place_annotations: {} }).placeAnnotations, { labels: {}, merges: [] });
+  assert.equal(readRideMap({ ...data, place_annotations: { labels: { [ids[0]]: '\u0085合成球馆' } } }).select().destinations[0].label, '\u0085合成球馆');
+  const group = { anchorId: ids[0], memberIds: ids.slice(0, 2) };
+  for (const invalid of [null, [], { extra: true }, { labels: [] }, { labels: { private: 'name' } }, { labels: { [ids[0]]: '' } }, { labels: { [ids[0]]: '\ufeff合成球馆' } }, { labels: { [ids[0] + '\n']: 'name' } }, { labels: { [ids[0]]: ' leading' } }, { labels: { [ids[0]]: '🏸'.repeat(41) } }, { merges: {} }, { merges: [{ anchorId: ids[0], memberIds: [ids[0]] }] }, { merges: [{ anchorId: ids[0], memberIds: [ids[0], ids[0]] }] }, { merges: [{ anchorId: ids[2], memberIds: ids.slice(0, 2) }] }, { merges: [{ anchorId: ids[0], memberIds: [ids[0], 'private'] }] }, { merges: [{ ...group, extra: true }] }, { merges: Array(12501).fill(group) }]) {
+    assert.throws(() => readRideMap({ ...data, place_annotations: invalid }), /公开地点/);
+  }
+  assert.throws(() => readRideMap({ ...data, extra: 'private' }), /白名单/);
+});
