@@ -107,8 +107,12 @@ function cuePlace(id) {
     clearPlaceCue(); render();
   }, placeCueDuration);
 }
+function clearSelection() {
+  clearPlaceCue(); state.selected = null; state.editing = null; state.merging = false; render();
+}
 function choosePlace(id, fromMarker = false) {
   if (!state.view?.destinations.some(place => place.id === id)) return;
+  if (state.model.placeAnnotations !== null && state.selected === id) { clearSelection(); return; }
   if (fromMarker) setSidebar(true);
   cuePlace(id);
   if (state.selected !== id) { state.selected = id; state.editing = null; state.merging = false; }
@@ -123,8 +127,7 @@ function render() {
   const { model } = state;
   if (!model) return;
   if (model.placeAnnotations !== null) { state.editing = null; state.merging = false; }
-  $('shared-place-note').hidden = model.placeAnnotations === null;
-  $('place-storage-note').textContent = model.placeAnnotations === null ? '名称与地点合并只保存在此浏览器的当前地址。' : '地点名称与合并由发布者统一维护，所有设备一致。';
+  $('place-storage-note').hidden = model.placeAnnotations !== null;
   $('edit-place').hidden = model.placeAnnotations !== null;
   $('merge-place').hidden = model.placeAnnotations !== null;
   const view = state.view = model.select({ labels: state.labels, merges: state.merges });
@@ -167,7 +170,7 @@ function render() {
   if (focusPlace) [...document.querySelectorAll(focusMarker ? '.destination-marker button' : '.place-button')].find(button => button.dataset.placeId === focusPlace)?.focus({ preventScroll: true });
   $('places-empty').hidden = view.destinations.length > 0;
   $('places-empty').textContent = '数据中没有符合范围的行程终点。';
-  document.querySelector('.place-detail').hidden = !selectedPlace;
+  document.querySelector('.place-detail').hidden = !selectedPlace || model.placeAnnotations !== null;
   $('selection-summary').hidden = !selectedPlace || state.editing === state.selected || state.merging;
   $('merge-form').hidden = !selectedPlace || !state.merging;
   $('selection-empty').hidden = !!selectedPlace;
@@ -247,7 +250,7 @@ async function loadDataset(text, fitView = true) {
 $('fit').addEventListener('click', fit);
 $('toggle-places').addEventListener('click', () => setSidebar($('toggle-places').getAttribute('aria-expanded') !== 'true'));
 $('show-grid').addEventListener('change', () => { $('cell-info').hidden = true; render(); });
-$('clear-selection').addEventListener('click', () => { clearPlaceCue(); state.selected = null; state.editing = null; state.merging = false; render(); });
+$('clear-selection').addEventListener('click', clearSelection);
 $('close-places').addEventListener('click', () => { setSidebar(false); $('toggle-places').focus(); });
 $('edit-place').addEventListener('click', () => {
   if (state.model?.placeAnnotations !== null) return;
@@ -303,6 +306,7 @@ function showCell(event) {
   const key = state.model.cellAt(event.latlng.lat, event.latlng.lng), count = state.view.passages.get(key) || 0;
   $('cell-info').hidden = false; $('cell-info').replaceChildren(Object.assign(document.createElement('strong'), {textContent: count}), '次行程经过这个区域');
 }
+map.on('click', () => { if (state.model?.placeAnnotations != null && state.selected) clearSelection(); });
 map.on('mousemove click', showCell); map.on('mouseout', () => { $('cell-info').hidden = true; });
 
 let updateState = { phase: 'unavailable', canRequest: false, requestedAt: null, nextAllowedAt: null, request: 'idle', timer: null };

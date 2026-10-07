@@ -48,12 +48,12 @@ h2 { font-size: 16px; font-weight: 600; }
 .places-hidden #map { right: 0; }
 .leaflet-container { font: inherit; }
 .route-canvas { pointer-events: none; position: absolute; }
-.toolbar { position: absolute; top: 16px; left: 24px; z-index: 500; display: flex; align-items: center; gap: 8px; max-width: calc(100% - var(--sidebar) - 48px); }
+.toolbar { position: absolute; top: 16px; left: 24px; z-index: 500; display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: center; column-gap: 8px; max-width: calc(100% - var(--sidebar) - 48px); }
 .places-hidden .toolbar { max-width: calc(100% - 48px); }
-#update-map { display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; padding: 8px 4px; border: 0; background: transparent; color: var(--secondary); font-size: 12px; }
+#update-map { grid-column: 1; grid-row: 1; display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; padding: 8px 4px; border: 0; background: transparent; color: var(--secondary); font-size: 12px; }
 #update-map:hover:not(:disabled) { color: var(--ink); background: var(--hover); }
-.update-meta { min-width: 0; display: flex; flex-direction: column; gap: 2px; color: var(--secondary); font-size: 11px; }
-#update-status { color: var(--ink); }
+#updated-at { grid-column: 2; grid-row: 1; color: var(--secondary); font-size: 11px; white-space: nowrap; }
+#update-status { grid-column: 2; grid-row: 2; color: var(--ink); font-size: 11px; }
 .metrics { display: flex; flex-direction: column; gap: 3px; color: var(--secondary); font-size: 11px; }
 .metrics strong { margin-left: 8px; font-weight: 500; }
 #visible-stat { color: var(--ink); }
@@ -143,7 +143,6 @@ h2 { font-size: 16px; font-weight: 600; }
  #map { inset: 0 0 var(--dock); }
  .places-hidden #map { bottom: 0; }
  .toolbar,.places-hidden .toolbar { top: 12px; left: 12px; max-width: calc(100% - 24px); }
- .toolbar { gap: 8px; }
  .metrics strong { margin-left: 6px; }
  #places-panel { inset: auto 0 0; width: 100%; height: var(--dock); border-left: 0; border-top: 1px solid var(--line); }
  .panel-heading { padding: 0 16px; height: 44px; min-height: 44px; }
@@ -179,10 +178,8 @@ h2 { font-size: 16px; font-weight: 600; }
 }
 
 
-#updated-at { color: var(--secondary); font-size: 11px; }
 
-.update-controls { display: flex; flex-direction: column; align-items: flex-start; flex-shrink: 0; }
-#badminton-stat { display: flex; align-items: center; gap: 5px; color: var(--secondary); font-size: 12px; padding: 0 4px; white-space: nowrap; }
+#badminton-stat { grid-column: 1; grid-row: 2; display: flex; align-items: center; gap: 5px; color: var(--secondary); font-size: 12px; padding: 0 4px; white-space: nowrap; }
 svg.badminton-icon { width: 18px; height: 18px; flex-shrink: 0; fill: currentColor; stroke: none; }
 .destination-marker button svg.badminton-icon { fill: currentColor; stroke: none; width: 19px; height: 19px; }
 .nature-stat { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; white-space: normal; font-size: 11px; }

@@ -17,13 +17,14 @@ execFileSync('./.venv/bin/python',['-c',fixtureScript]);
 const retainedAssets=path.join(scratch,'assets');
 await fs.cp(path.join(oldSite,'assets'),retainedAssets,{recursive:true});
 await fs.cp(path.join(site,'assets'),retainedAssets,{recursive:true});
-let activeSite=site,longCache=false;
+let activeSite=site,longCache=false,updatePhase=null;
 const types={'.html':'text/html','.mjs':'text/javascript','.js':'text/javascript','.css':'text/css','.json':'application/json','.png':'image/png','.woff2':'font/woff2'};
 const requests=[];
 const server=createServer(async(req,res)=>{
  requests.push({method:req.method,path:req.url});
  if(!['GET','HEAD'].includes(req.method)){res.writeHead(405);res.end();return;}
  const name=req.url==='/map/'?'index.html':req.url?.startsWith('/map/')?req.url.slice(5):null;
+ if(name==='api/update'&&updatePhase){res.writeHead(200,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify({phase:updatePhase,can_request:false,requested_at:null,next_allowed_at:null}));return;}
  if(!name||name.includes('..')||name.includes('?')){res.writeHead(404);res.end();return;}
  try{const target=name.startsWith('assets/')?path.join(retainedAssets,name.slice(7)):path.join(activeSite,name);const bytes=await fs.readFile(target);res.writeHead(200,{'Content-Type':types[path.extname(name)]||'text/plain','Cache-Control':longCache&&/\.(css|mjs|js)$/.test(name)?'public, max-age=14400':'no-store'});res.end(req.method==='HEAD'?undefined:bytes);}catch{res.writeHead(404);res.end();}
 });
@@ -88,20 +89,82 @@ try{
  assert.equal(await page.locator('#place-label').inputValue(),'');
  assert.deepEqual(await page.evaluate(()=>Object.fromEntries(Object.entries(localStorage).filter(([key])=>key.startsWith('ride-map-labels:')))),oldStorage);
  const sharedContexts=[];
+ const selectionEvidence=[];
+ updatePhase='idle';
  const sharedPages=[];
- for(const viewport of [{width:1280,height:800},{width:390,height:844}]){
+ for(const viewport of [{width:1440,height:900},{width:390,height:844},{width:320,height:720}]){
   const context=await browser.newContext({viewport});sharedContexts.push(context);
   const device=await context.newPage();sharedPages.push(device);
   device.on('pageerror',error=>errors.push(error.message));
   await device.route('**/*',route=>route.request().url().startsWith(origin)?route.continue():route.abort());
   await device.goto(origin+'/map/');
   await device.waitForFunction(()=>document.querySelector('.place-name').textContent==='合成球馆🏸');
-  await device.locator('#toggle-places').click();await device.locator('.place-button').first().click();
+  await device.locator('#toggle-places').click();
+  const canvas=()=>device.locator('.route-canvas').evaluate(async element=>{await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));return element.toDataURL();});
+  await device.waitForFunction(()=>document.querySelector('.route-canvas').width===document.querySelector('#map').clientWidth*devicePixelRatio);
+  await device.locator('.route-canvas').screenshot({path:path.join(output,`routes-before-${viewport.width}.png`)});
+  const unselectedRoutes=await canvas();
+  const firstPlace=device.locator('.place-button').first();
+  const placeId=await firstPlace.getAttribute('data-place-id');
+  await firstPlace.click();
+  assert.equal(await firstPlace.getAttribute('aria-pressed'),'true');
+  assert.notEqual(await canvas(),unselectedRoutes,'Selection dims unrelated routes.');
   assert.equal(await device.locator('.place-button').count(),3);
   assert.match(await device.locator('#selection-count').textContent(),/9 次行程终点 · 9 个骑行日/);
   assert.equal((await device.locator('#badminton-stat').textContent()).trim(),'9 次');
   assert.equal(await device.locator('.destination-marker').count(),2);
-  assert.equal(await device.locator('#shared-place-note').isVisible(),true);
+  assert.equal(await device.locator('.place-detail').isVisible(),false);
+  assert.equal(await device.locator('#shared-place-note').count(),0);
+  await device.locator('.place-method summary').click();
+  assert.equal(await firstPlace.getAttribute('aria-pressed'),'true','Statistics controls preserve selection.');
+  assert.equal(await device.locator('#place-storage-note').isVisible(),false);
+  assert.doesNotMatch(await device.locator('body').innerText(),/发布者|所有设备一致|名称与地点合并只保存在/);
+  await device.locator('.place-method summary').click();
+  await firstPlace.click();
+  assert.equal(await firstPlace.getAttribute('aria-pressed'),'false','Clicking the selected row clears it.');
+  assert.equal(await device.locator('.is-cued').count(),0);
+  const restoredRoutes=await canvas();
+  await device.locator('.route-canvas').screenshot({path:path.join(output,`routes-after-${viewport.width}.png`)});
+  assert.ok(restoredRoutes===unselectedRoutes,'Deselection restores every route.');
+  const marker=device.locator(`.destination-marker button[data-place-id="${placeId}"]`);
+  await marker.click();
+  assert.equal(await firstPlace.getAttribute('aria-pressed'),'true','Marker click does not bubble and clear selection.');
+  await marker.click();
+  assert.equal(await firstPlace.getAttribute('aria-pressed'),'false','Clicking the selected marker clears it.');
+  await firstPlace.click();
+  await device.locator('#map').click({position:{x:24,y:150}});
+  assert.equal(await firstPlace.getAttribute('aria-pressed'),'false','Map background clears selection.');
+  assert.equal(await device.locator('.is-cued').count(),0);
+  assert.equal(await canvas(),unselectedRoutes);
+  assert.equal(await device.locator('.destination-marker').count(),2,'Named pins survive deselection.');
+  await firstPlace.click();
+  await device.locator('.leaflet-control-zoom-in').click();
+  assert.equal(await firstPlace.getAttribute('aria-pressed'),'true','Zoom keeps selection.');
+  const mapBox=await device.locator('#map').boundingBox();
+  await device.mouse.move(mapBox.x+40,mapBox.y+150);await device.mouse.down();
+  await device.mouse.move(mapBox.x+70,mapBox.y+180,{steps:8});await device.mouse.up();
+  assert.equal(await firstPlace.getAttribute('aria-pressed'),'true','Dragging keeps selection.');
+  await firstPlace.click();
+  const alignment=[];
+  for(const phase of ['idle','queued','failed']){
+   updatePhase=phase;
+   const statusResponse=device.waitForResponse(response=>response.url()===origin+'/map/api/update');
+   await device.evaluate(()=>window.dispatchEvent(new Event('focus')));
+   await (await statusResponse).finished();
+   await device.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+   await device.waitForFunction(expected=>document.querySelector('#update-status').textContent===expected,{idle:'',queued:'等待更新',failed:'更新未完成，请稍后重试。'}[phase]);
+   const geometry=await device.evaluate(()=>{
+    const button=document.querySelector('#update-map').getBoundingClientRect(),time=document.querySelector('#updated-at').getBoundingClientRect();
+    return {delta:Math.abs(button.y+button.height/2-time.y-time.height/2),buttonRight:button.right,timeLeft:time.left,timeRight:time.right,viewport:innerWidth};
+   });
+   assert.ok(geometry.delta<=1,`Timestamp must align with the button at ${viewport.width}px during ${phase}.`);
+   assert.ok(geometry.timeLeft>=geometry.buttonRight&&geometry.timeRight<=geometry.viewport);
+   alignment.push({phase,...geometry});
+  }
+  selectionEvidence.push({width:viewport.width,rowToggle:true,markerToggle:true,backgroundClear:true,routeRestoration:true,controlsAndDragRetainSelection:true,alignment});
+  updatePhase='idle';
+  await firstPlace.click();
+  assert.equal(await device.locator('.place-detail').isVisible(),false);
   for(const id of ['edit-place','merge-place','label-form','merge-form'])assert.equal(await device.locator('#'+id).isVisible(),false);
   await device.evaluate(()=>{document.querySelector('#edit-place').click();document.querySelector('#merge-place').click();document.querySelector('#label-form').dispatchEvent(new Event('submit',{cancelable:true}));document.querySelector('#merge-form').dispatchEvent(new Event('submit',{cancelable:true}));});
   assert.equal(await device.locator('#label-form').isVisible(),false);
@@ -130,7 +193,7 @@ try{
  assert.equal(await sharedPages[0].locator('.destination-marker').count(),0);
  assert.doesNotMatch(await sharedPages[0].locator('#places').textContent(),/浏览器旧名称/);
  for(const context of sharedContexts)await context.close();
- await fs.writeFile(path.join(output,'shared-places.json'),JSON.stringify({passed:true,synthetic:true,freshDevices:2,mergedEndpoints:9,badmintonDays:9,staleStorageIgnoredAndPreserved:true,sharedRefresh:true,emptyAuthority:true,writeControlsUnavailable:true},null,2));
+ await fs.writeFile(path.join(output,'shared-places.json'),JSON.stringify({passed:true,synthetic:true,freshDevices:3,selection:selectionEvidence,mergedEndpoints:9,badmintonDays:9,staleStorageIgnoredAndPreserved:true,sharedRefresh:true,emptyAuthority:true,writeControlsUnavailable:true},null,2));
  await fs.writeFile(path.join(site,'dataset.json'),JSON.stringify(updated));
  const cacheContext=await browser.newContext({viewport:{width:1100,height:800},colorScheme:'dark'});
  const cachedPage=await cacheContext.newPage();
