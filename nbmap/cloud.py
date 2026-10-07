@@ -95,10 +95,18 @@ def download_state(config):
 
 
 def readme_image(text):
-    block = f'{START}\n\n![骑行轨迹]({IMAGE_PATH})\n\n{END}'
-    if START in text and END in text:
-        return text[:text.index(START)] + block + text[text.index(END) + len(END):]
-    return text.rstrip() + '\n\n' + block + '\n'
+    if START in text or END in text:
+        if text.count(START) != 1 or text.count(END) != 1 or text.index(START) > text.index(END):
+            raise ValueError('README 图片标记不完整、重复或顺序错误；未替换现有内容。')
+        block = text[text.index(START) + len(START):text.index(END)]
+        markdown_image = re.search(r'!\[[^\]]*\]\(' + re.escape(IMAGE_PATH) + r'(?:\s+[^)]*)?\)', block)
+        html_image = re.search(r'<img\b[^>]*\bsrc\s*=\s*([\"\'])' + re.escape(IMAGE_PATH) + r'\1', block, re.I)
+        if not markdown_image and not html_image:
+            raise ValueError('README 图片块缺少预期图片引用；未替换现有内容。')
+        return text
+    block = f'{START}\n\n![骑行轨迹]({IMAGE_PATH})\n\n{END}\n'
+    separator = ('\n' if text.endswith('\n') else '\n\n') if text else ''
+    return text + separator + block
 
 
 def public_fingerprint(public):
@@ -152,7 +160,10 @@ def publish_image(root, image, destinations):
         output.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(image, output)
         readme = target / 'README.md'
-        readme.write_text(readme_image(readme.read_text() if readme.exists() else ''))
+        original = readme.read_bytes().decode('utf-8') if readme.exists() else ''
+        updated = readme_image(original)
+        if updated != original:
+            readme.write_bytes(updated.encode('utf-8'))
         command(['git', 'add', '--', IMAGE_PATH, 'README.md'], cwd=target, env=env)
         paths = command(['git', 'diff', '--cached', '--name-only'], cwd=target).stdout.decode().splitlines()
         if set(paths) - {IMAGE_PATH, 'README.md'}:

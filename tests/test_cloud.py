@@ -351,16 +351,89 @@ class CloudTests(unittest.TestCase):
         self.assertEqual(readme_image(updated), updated)
         self.assertIn(IMAGE_PATH, updated)
 
-    def test_readme_replaces_legacy_image_block_without_changing_surrounding_text(self):
+    def test_readme_preserves_existing_image_block_and_surrounding_text(self):
         original = ('# Existing project\n\nKeep this text.\n\n'
                     '<!-- ninebot-track-image:start -->\n\n## 骑行轨迹\n\n'
                     '![无底图骑行轨迹](assets/ninebot-tracks.png)\n\n'
                     '<!-- ninebot-track-image:end -->\n\nKeep this footer.\n')
-        expected = ('# Existing project\n\nKeep this text.\n\n'
+        self.assertEqual(readme_image(original), original)
+
+    def test_readme_preserves_profile_width_alignment_and_caption(self):
+        original = ('Fit quietly into everyday life.\n\n'
+                    '<p align="center">\n'
+                    '  <img src="assets/obsidian-notes-word-history.png" width="420">\n'
+                    '  <br>\n  <sub>Writing, quietly adding up.</sub>\n</p>\n\n'
                     '<!-- ninebot-track-image:start -->\n\n'
-                    '![骑行轨迹](assets/ninebot-tracks.png)\n\n'
+                    '<p align="center">\n'
+                    '  <img src="assets/ninebot-tracks.png" alt="骑行轨迹" width="420">\n'
+                    '  <br>\n  <sub>Everyday rides, traced over time.</sub>\n</p>\n\n'
                     '<!-- ninebot-track-image:end -->\n\nKeep this footer.\n')
-        self.assertEqual(readme_image(original), expected)
+        for _ in range(2):
+            self.assertEqual(readme_image(original), original)
+
+    def test_readme_rejects_ambiguous_or_incomplete_blocks(self):
+        start, end = '<!-- ninebot-track-image:start -->', '<!-- ninebot-track-image:end -->'
+        image = f'![骑行轨迹]({IMAGE_PATH})'
+        for text in (start + image, image + end, end + image + start,
+                     start + image + end + start + image + end,
+                     start + 'Keep this caption; image missing.' + end):
+            with self.subTest(text=text), self.assertRaises(ValueError):
+                readme_image(text)
+
+    def test_readme_initialization_preserves_original_whitespace(self):
+        original = '# Existing project\r\nKeep this footer.  \r\n\r\n'
+        updated = readme_image(original)
+        self.assertTrue(updated.startswith(original))
+        self.assertEqual(readme_image(updated), updated)
+
+    def test_two_image_generation_and_publish_rounds_keep_profile_readme_bytes(self):
+        origin = self.root / 'profile-origin'
+        subprocess.run(['git', 'init', '-b', 'main', str(origin)], check=True, capture_output=True)
+        readme = ('Fit quietly into everyday life.\n\n'
+                  '<p align="center">\n'
+                  '  <img src="assets/obsidian-notes-word-history.png" width="420">\n'
+                  '  <br>\n  <sub>Writing, quietly adding up.</sub>\n</p>\n\n'
+                  '<!-- ninebot-track-image:start -->\n\n'
+                  '<p align="center">\n'
+                  '  <img src="assets/ninebot-tracks.png" alt="骑行轨迹" width="420">\n'
+                  '  <br>\n  <sub>Everyday rides, traced over time.</sub>\n</p>\n\n'
+                  '<!-- ninebot-track-image:end -->\n\nKeep this footer.\n').replace('\n', '\r\n').encode('utf-8')
+        (origin / 'README.md').write_bytes(readme)
+        subprocess.run(['git', 'add', 'README.md'], cwd=origin, check=True, capture_output=True)
+        subprocess.run(['git', '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+                        'commit', '-m', 'Seed profile'], cwd=origin, check=True, capture_output=True)
+        pushes, diffs, image_hashes = [], [], []
+
+        def local_transport(args, **kwargs):
+            if args[0] == 'ssh-keygen':
+                return subprocess.CompletedProcess(args, 0, stdout=b'synthetic-public-key', stderr=b'')
+            if args[:2] == ['git', 'clone']:
+                args = [*args[:-2], str(origin), args[-1]]
+            if args[:2] == ['git', 'push']:
+                pushes.append(args)
+                return subprocess.CompletedProcess(args, 0, stdout=b'', stderr=b'')
+            result = subprocess.run(args, capture_output=True, **kwargs)
+            if args[:4] == ['git', 'diff', '--cached', '--name-only']:
+                diffs.append(result.stdout.decode().splitlines())
+            return result
+
+        dataset = read_json(self.archive.path / 'prepared/dataset.json')
+        for cycle in (1, 2):
+            work = self.root / f'cycle-{cycle}'
+            work.mkdir()
+            (work / 'known-hosts').write_text('synthetic-host')
+            image = render_tracks(dataset, work / 'tracks.png')
+            image_hashes.append(hashlib.sha256(image.read_bytes()).hexdigest())
+            with patch.dict('os.environ', {'PUBLIC_DEPLOY_KEY_1': 'synthetic-key'}), \
+                 patch('nbmap.cloud.command', side_effect=local_transport):
+                publish_image(work, image, [{'repo': 'fixture/profile', 'branch': 'main'}])
+            origin = work / 'publish-1'
+            self.assertEqual((origin / 'README.md').read_bytes(), readme)
+            self.assertEqual((origin / IMAGE_PATH).read_bytes(), image.read_bytes())
+            self.assertFalse((work / 'publish-1.key').exists())
+        self.assertEqual(image_hashes[0], image_hashes[1])
+        self.assertEqual(diffs, [[IMAGE_PATH], []])
+        self.assertEqual(len(pushes), 1)
 
     def test_readme_keeps_top_image_block_and_body_after_repeated_updates(self):
         original = ('<!-- ninebot-track-image:start -->\n\n'

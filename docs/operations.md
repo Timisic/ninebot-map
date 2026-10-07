@@ -16,6 +16,8 @@
 
 公开代码包含程序、项目技能、文档、合成 fixture 和已授权的轨迹 PNG。原始坐标 JSON、会话、密钥和私人证据留在 Git 忽略目录中。公共源码同步与云端图片更新是两个不同的发布操作。
 
+图片更新复用 `assets/ninebot-tracks.png` 稳定路径。README 已有完整的 `ninebot-track-image:start/end` 区块及该图片引用时，发布器保留 README 原文，包括图片宽度、居中、图注和区块外内容；没有标记时才追加初始图片块。标记缺失一半、重复、顺序错误或区块内没有预期图片时停止发布，避免覆盖手工排版。修复发布器需同时更新源码仓库和私有同步仓库的 `main`，只修改 profile README 不能修复旧 worker 的覆盖行为。
+
 常规验证使用 `npm run verify`，运行数据来自合成 fixture。真实 `cloud status`、`cloud pull`、`cloud map` 与强制采集由具体任务的授权决定，不能把合成验收说成真实云端采集验收。
 
 公开地图的统一名称和地点合并保存在私有发布配置的 `site.place_annotations`，每次采集和发布重试都保留。仅在浏览器命名不会跨设备同步。配置与只读访问规则见[静态部署](static-deployment.md)。
