@@ -28,6 +28,7 @@ from .track_image import render_tracks
 IMAGE_PATH = 'assets/ninebot-tracks.png'
 START, END = '<!-- ninebot-track-image:start -->', '<!-- ninebot-track-image:end -->'
 REPO_PATTERN = re.compile(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+')
+SYNC_GIT_CONFIG = ('-c', 'user.name=Timisic', '-c', 'user.email=91100723+Timisic@users.noreply.github.com')
 
 
 class CommandFailure(RuntimeError):
@@ -157,7 +158,7 @@ def publish_image(root, image, destinations):
         if set(paths) - {IMAGE_PATH, 'README.md'}:
             raise ValueError('公开发布包含图片之外的未授权文件')
         if paths:
-            command(['git', '-c', 'user.name=Ninebot Map Sync', '-c', 'user.email=sync@users.noreply.github.com',
+            command(['git', *SYNC_GIT_CONFIG,
                      'commit', '-m', 'Update basemap-free ride image'], cwd=target, env=env)
             command(['git', 'push', 'origin', 'HEAD:' + destination['branch']], cwd=target, env=env)
         key_path.unlink(missing_ok=True)
@@ -302,7 +303,7 @@ def worker(root):
     command(['git', 'worktree', 'add', '--detach', str(output), 'FETCH_HEAD'], cwd=root)
     (output / 'state.enc').write_bytes(seal(updated, key))
     command(['git', 'add', '--', 'state.enc'], cwd=output)
-    command(['git', '-c', 'user.name=Ninebot Map Sync', '-c', 'user.email=sync@users.noreply.github.com',
+    command(['git', *SYNC_GIT_CONFIG,
              'commit', '-m', 'Update encrypted sync state'], cwd=output)
     command(['git', 'push', 'origin', 'HEAD:state'], cwd=output)
     state = updated['files'].get('sessions/schedule-state.json', {})
@@ -339,7 +340,7 @@ def deploy_code(root, folder, repo, settings):
         paths.append('CONTEXT.md')
     command(['git', 'add', '--all', '--', *paths], cwd=folder)
     if command(['git', 'diff', '--cached', '--quiet'], cwd=folder, check=False).returncode:
-        command(['git', '-c', 'user.name=Ninebot Map Sync', '-c', 'user.email=sync@users.noreply.github.com',
+        command(['git', *SYNC_GIT_CONFIG,
                  'commit', '-m', 'Configure private ride sync and public image publishing'], cwd=folder)
     command(['git', 'push', '-u', 'origin', 'main'], cwd=folder)
 
@@ -401,7 +402,7 @@ def setup(config, data, root, *, repo=None, interval_days=None, publish_repos=No
         payload = checkpoint(config, data, session['revision'])
         (seed / 'state.enc').write_bytes(seal(payload, key))
         command(['git', 'add', '--', 'state.enc'], cwd=seed)
-        command(['git', '-c', 'user.name=Ninebot Map Sync', '-c', 'user.email=sync@users.noreply.github.com',
+        command(['git', *SYNC_GIT_CONFIG,
                  'commit', '-m', 'Seed encrypted local archive'], cwd=seed)
         command(['git', 'push', '-u', 'origin', 'state'], cwd=seed)
     deploy_code(root, folder, repo, settings)

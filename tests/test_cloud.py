@@ -364,6 +364,48 @@ class CloudTests(unittest.TestCase):
         self.assertFalse((self.root / 'publish-1.key').exists())
         self.assertTrue((self.root / 'publish-1/README.md').read_text().startswith('# Keep me'))
 
+    def test_public_image_commits_belong_to_owner_for_both_destinations(self):
+        image = self.root / 'tracks.png'
+        image.write_bytes(b'synthetic-image')
+        (self.root / 'known-hosts').write_text('synthetic-host')
+        origins = {}
+        destinations = [{'repo': 'fixture/map', 'branch': 'main'}, {'repo': 'fixture/profile', 'branch': 'main'}]
+        for index, destination in enumerate(destinations, 1):
+            origin = self.root / f'origin-{index}'
+            subprocess.run(['git', 'init', '-b', 'main', str(origin)], check=True, capture_output=True)
+            (origin / 'README.md').write_text('# Keep me\n')
+            subprocess.run(['git', 'add', 'README.md'], cwd=origin, check=True, capture_output=True)
+            subprocess.run(['git', '-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid',
+                            'commit', '-m', 'Seed fixture'], cwd=origin, check=True, capture_output=True)
+            origins[destination['repo']] = origin
+
+        def local_transport(args, **kwargs):
+            if args[0] == 'ssh-keygen':
+                return subprocess.CompletedProcess(args, 0, stdout=b'synthetic-public-key', stderr=b'')
+            if args[:2] == ['git', 'clone']:
+                repo = args[-2].removeprefix('git@github.com:').removesuffix('.git')
+                args = [*args[:-2], str(origins[repo]), args[-1]]
+            if args[:2] == ['git', 'push']:
+                return subprocess.CompletedProcess(args, 0, stdout=b'', stderr=b'')
+            return subprocess.run(args, capture_output=True, **kwargs)
+
+        with patch.dict('os.environ', {'PUBLIC_DEPLOY_KEY_1': 'synthetic-key-1', 'PUBLIC_DEPLOY_KEY_2': 'synthetic-key-2'}), \
+             patch('nbmap.cloud.command', side_effect=local_transport):
+            publish_image(self.root, image, destinations)
+        expected = ['Timisic', '91100723+Timisic@users.noreply.github.com'] * 2
+        for index in (1, 2):
+            target = self.root / f'publish-{index}'
+            identity = subprocess.run(['git', 'log', '-1', '--format=%an%n%ae%n%cn%n%ce'],
+                                      cwd=target, check=True, capture_output=True, text=True).stdout.splitlines()
+            self.assertEqual(identity, expected)
+            changes = subprocess.run(['git', 'diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD'],
+                                     cwd=target, check=True, capture_output=True, text=True).stdout.splitlines()
+            self.assertEqual(set(changes), {IMAGE_PATH, 'README.md'})
+            count = subprocess.run(['git', 'rev-list', '--count', 'HEAD'], cwd=target,
+                                   check=True, capture_output=True, text=True).stdout.strip()
+            self.assertEqual(count, '2')
+            self.assertFalse((self.root / f'publish-{index}.key').exists())
+
     def test_trimmed_secret_key_parses_and_matches_its_target(self):
         key_path = self.root / 'synthetic-generated-key'
         subprocess.run(['ssh-keygen', '-t', 'ed25519', '-N', '', '-f', str(key_path)], check=True, capture_output=True)
