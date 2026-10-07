@@ -463,6 +463,7 @@ try {
     ride.started_at = new Date(Date.UTC(2026, 0, 1) + i * 645000).toISOString();
     ride.ended_at = new Date(Date.UTC(2026, 0, 1) + i * 645000 + 600000).toISOString();
   }
+  placeData.rides.find(ride => ride.id === 'place-090').ended_at = null;
   await fs.writeFile(datasetPath, JSON.stringify(placeData));
   const placesContext = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
   const placesPage = await placesContext.newPage();
@@ -537,6 +538,7 @@ try {
   await placesPage.locator('#cancel-edit').click();
   await namePlace('place-000', '合成合并地点');
   await namePlace('place-090', '奥森南门');
+  assert.match(await placesPage.locator('.nature-stat').textContent(), /暂无停留数据/);
   await placesPage.locator('#clear-selection').click();
   await placesPage.locator('#places').evaluate(element => { element.scrollTop = 0; });
   await placesPage.locator('.place-button[data-place-id="place-090"]').click();

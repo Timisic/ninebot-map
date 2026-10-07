@@ -34,7 +34,7 @@ Run `npm run verify -- --suite wheel`. Require raw pixel, line, page and pinch d
 
 ## Gotchas
 
-- Synthetic wheel events prove handler behavior, not physical hardware feel.
+- Synthetic wheel events prove handler behavior, not physical hardware feel. The pinch case uses `WheelEvent` with `ctrlKey`, not a two-finger touch gesture. Cancellation probes dispatch Leaflet drag/resize events; the map suite separately drives browser pointer dragging.
 - Mocked tile availability does not prove live OpenStreetMap connectivity or image sharpness.
 - Road preview does not verify the source coordinate system.
 - Button and keyboard affordances are separate entry points; report them unverified unless the run exercises them.

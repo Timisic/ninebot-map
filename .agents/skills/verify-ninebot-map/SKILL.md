@@ -11,7 +11,7 @@ Run from this repository's root. This skill belongs to `.agents/skills/`; keep i
 
 Use the repository's installed `.venv/bin/python`, Node, and Playwright. If dependencies are missing, run `./scripts/setup.sh` and `npm ci`. Local browser checks default to installed Chrome. Set `PLAYWRIGHT_CHANNEL=chromium` to use Playwright's bundled Chromium after installing it with `npx playwright install chromium`.
 
-The existing browser harnesses launch `./run map --dataset <synthetic-file> --port 0 --no-open`. Read the emitted loopback URL; the allocated port differs per run. The refresh harness creates its dataset in a unique ignored scratch directory. It owns the server and browser it starts.
+The map and refresh harnesses launch `./run map --dataset <synthetic-file> --port 0 --no-open`. Wheel uses a synthetic local server with production map modules. Startup and static harnesses create their own isolated servers and exports. Each harness validates its initial fixture before UI actions. Read the emitted loopback URL; the allocated port differs per run. The refresh harness creates its dataset in a unique ignored scratch directory. It owns the server and browser it starts.
 
 ## Doctor
 
@@ -22,7 +22,7 @@ The refresh harness also performs a read-only HTTP doctor on its owned instance 
 ## Drive
 
 - `npm run verify:smoke` checks project layout and the real local map refresh path.
-- `npm run verify` runs project structure, Python, model, browser, wheel and refresh suites.
+- `npm run verify` runs project structure, Python, model, map, wheel, static, startup and refresh suites.
 - `npm run verify -- --suite map` runs both map and startup suites, covering endpoint loading, startup failures, activity navigation, labels, system theme and basemap behavior. The existing browser CI job uses this group.
 - `npm run verify -- --suite wheel` covers production wheel handling at two device pixel ratios.
 - `npm run verify -- --suite refresh` covers valid updates, preserved controls, invalid replacement and public-update UI responses.
@@ -47,6 +47,6 @@ The harness closes its browser and terminates only its spawned server. Refresh p
 
 ## Helpers
 
-`scripts/verify.mjs` is the executable wrapper behind the npm commands. `scripts/check-project.py` checks layout, links, skill shape and tracked runtime-file boundaries. The wrapper reuses `scripts/verify-map.mjs`, `scripts/verify-wheel.mjs`, `scripts/verify-startup.mjs` and `scripts/verify-auto-sync.mjs`; add feature coverage to the matching harness.
+`scripts/verify.mjs` is the executable wrapper behind the npm commands. `scripts/check-project.py` checks layout, links, skill shape and tracked runtime-file boundaries. The wrapper reuses `scripts/verify-map.mjs`, `scripts/verify-wheel.mjs`, `scripts/verify-startup.mjs`, `scripts/verify-static.mjs` and `scripts/verify-auto-sync.mjs`; add feature coverage to the matching harness.
 
 Keep this map aligned with actual entry points. Use `pstack-personal:maintain-verification-skill` when asked to audit it after feature changes.
