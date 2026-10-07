@@ -5,6 +5,9 @@ from pathlib import Path
 
 WEB_ROOT = Path(__file__).resolve().parent.parent / 'web'
 ASSETS = {
+    '/vendor/pinhead/badminton.svg': ('vendor/pinhead/badminton.svg', 'image/svg+xml'),
+    '/vendor/pinhead/LICENSE': ('vendor/pinhead/LICENSE', 'text/plain; charset=utf-8'),
+    '/vendor/pinhead/PROVENANCE.md': ('vendor/pinhead/PROVENANCE.md', 'text/plain; charset=utf-8'),
     '/startup.js': ('startup.js', 'text/javascript'),
     '/wheel-zoom.mjs': ('wheel-zoom.mjs', 'text/javascript'),
     '/': ('index.html', 'text/html; charset=utf-8'),

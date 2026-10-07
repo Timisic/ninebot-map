@@ -25,17 +25,18 @@
 <main id="workspace">
   <div id="map" aria-label="骑行轨迹地图" tabindex="0"></div>
   <section class="toolbar" aria-label="数据更新">
-    <button id="update-map" type="button" disabled title="正在检查更新服务">更新</button><div class="update-meta"><time id="updated-at"></time><span id="update-status" role="status" aria-live="polite">正在加载路线…</span></div>
+    <div class="update-controls"><button id="update-map" type="button" disabled title="正在检查更新服务">更新</button><span id="badminton-stat" title="所有含 🏸 的命名地点按骑行日去重，同日多处或返回只计一次"></span></div><div class="update-meta"><time id="updated-at"></time><span id="update-status" role="status" aria-live="polite">正在加载路线…</span></div>
   </section>
   <aside id="places-panel" aria-label="常去地点">
     <div class="panel-heading"><div><h2>常去地点</h2><span id="place-total">0 处</span></div><button id="close-places" type="button">关闭</button></div>
     <ol id="places"></ol><p id="places-empty">数据就绪后显示常去地点。</p>
-    <section class="place-detail" aria-label="所选地点">
+    <section class="place-detail" aria-label="所选地点" hidden>
       <p id="selection-empty">选择地点，查看相关路线。</p>
-      <div id="selection-summary" hidden><div class="selection-heading"><strong id="selection-name"></strong><button id="clear-selection" type="button" class="text-button">取消选择</button></div><p id="selection-count"></p><div class="detail-actions"><button id="locate-place" type="button">在地图中定位</button><button id="edit-place" type="button">命名</button></div></div>
+      <div id="selection-summary" hidden><div class="selection-heading"><strong id="selection-name"></strong><button id="clear-selection" type="button" class="text-button">取消选择</button></div><p id="selection-count"></p><div class="detail-actions"><button id="locate-place" type="button">在地图中定位</button><button id="edit-place" type="button">命名</button><button id="merge-place" type="button">合并地点</button></div></div>
       <form id="label-form" hidden><label for="place-label">地点名称</label><div class="label-row"><input id="place-label" maxlength="40" autocomplete="off"><button type="submit">保存</button><button id="cancel-edit" type="button">取消</button></div><p id="label-note" role="status"></p></form>
+      <form id="merge-form" hidden><label for="merge-target">将所选地点合并到</label><div class="label-row"><select id="merge-target" required></select><button type="submit">合并</button><button id="cancel-merge" type="button">取消</button></div></form>
     </section>
-    <details class="place-method"><summary>次数怎么算？</summary><p>每条轨迹的终点计一次，在约 100 米范围内聚合。它表示行程结束，不代表停留时长或已确认到访。名称只保存在此浏览器的当前地址。</p></details>
+    <details class="place-method"><summary>统计口径</summary><p>每条轨迹的终点计一次，在约 100 米范围内聚合。它表示行程结束。含 🏸 的命名地点合计按骑行日去重。自然时长依据相邻骑行估算车辆停放，不代表人的实际停留。名称与地点合并只保存在此浏览器的当前地址。</p></details>
   </aside>
   <section id="empty" class="empty-state" hidden><h2 id="empty-title">地图数据尚未发布</h2><p id="empty-description">数据就绪后会自动显示，请稍后刷新。</p></section>
   <div class="map-settings">

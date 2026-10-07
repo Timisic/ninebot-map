@@ -116,12 +116,12 @@ try {
   assert.ok(renewedCueDeadline > initialCueDeadline + 300);
   assert.equal(await page.locator('#place-label').inputValue(), '尚未保存的名称');
   assert.equal(await page.locator('#label-form').isVisible(), true);
+  const selectedPin = await page.locator('.destination-marker button[aria-pressed=true]').evaluate(element => ({ disk: getComputedStyle(element, '::before').backgroundColor, pin: getComputedStyle(element.querySelector('svg')).color }));
   await page.waitForFunction(() => !document.querySelector('.destination-marker.is-cued'), null, { timeout: 3500 });
   const expiredAt = await page.evaluate(() => performance.now());
   assert.ok(expiredAt >= renewedCueDeadline && expiredAt < renewedCueDeadline + 600, JSON.stringify({ renewedCueDeadline, expiredAt }));
-  assert.equal(await page.locator('.destination-marker button[aria-pressed=true]').getAttribute('data-place-id'), cueId);
+  assert.equal(await page.locator('.destination-marker button').count(), 0, 'Unnamed places lose their temporary pin when the cue expires.');
   assert.equal(await page.locator('.leaflet-map-pane').getAttribute('style'), cueView);
-  const selectedPin = await page.locator('.destination-marker button[aria-pressed=true]').evaluate(element => ({ disk: getComputedStyle(element, '::before').backgroundColor, pin: getComputedStyle(element.querySelector('svg')).color }));
   assert.deepEqual(selectedPin, { disk: 'rgb(234, 245, 239)', pin: 'rgb(23, 75, 78)' });
   const viewBeforeTheme = await page.locator('.leaflet-map-pane').getAttribute('style');
   await toggleTheme(page);
@@ -130,7 +130,7 @@ try {
   assert.equal(await page.locator('html').getAttribute('data-theme'), 'light');
   assert.equal(await page.locator('#place-label').inputValue(), '尚未保存的名称');
   assert.equal(await page.locator('.leaflet-map-pane').getAttribute('style'), viewBeforeTheme);
-  assert.deepEqual(await page.locator('.destination-marker button[aria-pressed=true]').evaluate(element => ({ disk: getComputedStyle(element, '::before').backgroundColor, pin: getComputedStyle(element.querySelector('svg')).color })), selectedPin);
+  assert.equal(await page.locator('.destination-marker button').count(), 0);
   await selectTheme(page, 'system');
   assert.equal(await page.locator('html').getAttribute('data-theme'), 'dark');
   await page.emulateMedia({ colorScheme: 'light' });
@@ -456,7 +456,101 @@ try {
   assert.equal(await blockedPage.locator('#label-note').isVisible(), true);
   assert.match(await blockedPage.locator('#label-note').textContent(), /无法保存.*仅本次/);
   await blocked.close();
-  console.log(JSON.stringify({ passed: true, checks: ['local-smiley-font', 'theme-icon-centered-three-widths', 'menu-selected-row-contained', 'rounded-svg-controls', 'cue-monotonic-expiry', 'cue-renewal-preserves-edit', 'cue-rapid-selection', 'cue-locate-renewal', 'cue-reduced-motion', 'persistent-pale-selected-pin', 'default-system', 'theme-persistence-reload', 'theme-preserves-view-and-unsaved-label', 'blocked-storage-toggle', 'short-settings-disclosure', 'both-theme-contrast', 'desktop', 'mobile', 'mobile-activity-navigation-390-320', 'counts', 'no-date-filter', 'labels-persist', 'invalid-source-preserves', 'area-hover', 'raw-coordinates-basemap-toggle', 'visible-base-and-repeat-contrast', 'contrast', 'no-external-network', 'no-page-errors', 'online-layer-cleanup', 'two-layer-switches-only', 'quiet-label-scale', 'tiny-svg-markers', 'marker-opens-panel', 'fractional-tile-rendering-dpr1-dpr2', 'light-repeat-deepening', 'keyboard-marker-selection', 'delayed-tile-continuity', 'stable-place-reselection', 'drawer-draft-and-focus', 'route-contrast-two-themes-multiple-zooms'], font, fonts, themeMeasurements, cue: { cueId, initialCueDeadline, renewedCueDeadline, expiredAt, selectedPin }, contrast, overlapBrightnessRatio: +(six / one).toFixed(2) }, null, 2));
+
+  await context.close();
+  const placeData = makeDataset(Array.from({ length: 104 }, (_, i) => ({ id: `place-${String(i).padStart(3, '0')}`, xy: [[i * 300 - 300, 0], [i * 300, 0]] })));
+  for (const [i, ride] of placeData.rides.entries()) {
+    ride.started_at = new Date(Date.UTC(2026, 0, 1) + i * 645000).toISOString();
+    ride.ended_at = new Date(Date.UTC(2026, 0, 1) + i * 645000 + 600000).toISOString();
+  }
+  await fs.writeFile(datasetPath, JSON.stringify(placeData));
+  const placesContext = await browser.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
+  const placesPage = await placesContext.newPage();
+  const placeErrors = [];
+  placesPage.on('pageerror', error => placeErrors.push(error.message));
+  await placesPage.goto(url);
+  await placesPage.waitForFunction(() => document.querySelector('#visible-stat').textContent.includes('104 次'));
+  assert.equal(await placesPage.locator('.destination-marker').count(), 0);
+  await placesPage.evaluate(async () => {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('synthetic-map|unverified|destinations-fixed-anchor-100m-v1'));
+    const key = 'ride-map-labels:' + [...new Uint8Array(digest)].map(n => n.toString(16).padStart(2, '0')).join('');
+    localStorage.setItem(key, JSON.stringify({ 'place-103': '列表外的命名地点' }));
+  });
+  await placesPage.reload();
+  await placesPage.waitForFunction(() => document.querySelector('.destination-marker button')?.dataset.placeId === 'place-103');
+  assert.equal(await placesPage.locator('.place-button[data-place-id="place-103"]').count(), 0);
+  await placesPage.locator('#toggle-places').click();
+  assert.equal(await placesPage.locator('.place-detail').isVisible(), false);
+  const namePlace = async (id, label) => {
+    await placesPage.locator(`.place-button[data-place-id="${id}"]`).click();
+    await placesPage.locator('#edit-place').click();
+    await placesPage.locator('#place-label').fill(label);
+    await placesPage.locator('#label-form button[type=submit]').click();
+  };
+  await namePlace('place-000', '合成球馆🏸');
+  await namePlace('place-001', '合成球馆🏸');
+  assert.equal(await placesPage.locator('#place-total').textContent(), '104 处 · 展示前 100');
+  assert.equal((await placesPage.locator('#badminton-stat').textContent()).trim(), '1 次');
+  assert.equal(await placesPage.locator('.destination-marker svg.badminton-icon').count(), 2);
+  await placesPage.locator('#merge-place').click();
+  await placesPage.locator('#merge-target').selectOption('place-000');
+  await placesPage.locator('#merge-form button[type=submit]').click();
+  assert.equal(await placesPage.locator('#selection-count').textContent(), '2 次行程终点 · 1 个骑行日');
+  assert.equal(await placesPage.locator('.place-count').first().textContent(), '1次');
+  assert.equal(await placesPage.locator('#place-total').textContent(), '103 处 · 展示前 100');
+  await namePlace('place-000', '改名后的球馆🏸');
+  await placesPage.reload();
+  await placesPage.waitForFunction(() => document.querySelector('.place-name')?.textContent === '改名后的球馆🏸');
+  await placesPage.locator('#toggle-places').click();
+  await namePlace('place-000', '');
+  await placesPage.waitForFunction(() => !document.querySelector('.destination-marker.is-cued'));
+  assert.equal(await placesPage.locator('.destination-marker svg.badminton-icon').count(), 0);
+  assert.equal(await placesPage.locator('.destination-marker').count(), 1);
+  assert.equal(await placesPage.locator('.place-count').first().textContent(), '2次');
+  assert.equal((await placesPage.locator('#badminton-stat').textContent()).trim(), '0 次');
+  await namePlace('place-000', '奥森南门');
+  assert.match(await placesPage.locator('.nature-stat').textContent(), /出门放风感受自然[\s\S]*0 h 1 min/);
+  assert.match(await placesPage.locator('.nature-stat').getAttribute('aria-label'), /车辆停放/);
+  for (const viewport of [{ width: 390, height: 844 }, { width: 320, height: 720 }, { width: 640, height: 360 }, { width: 844, height: 390 }]) {
+    await placesPage.setViewportSize(viewport);
+    const geometry = await placesPage.evaluate(() => {
+      const panel = document.querySelector('#places-panel').getBoundingClientRect();
+      const list = document.querySelector('#places').getBoundingClientRect();
+      const nature = document.querySelector('.nature-stat').getBoundingClientRect();
+      const actions = document.querySelector('.detail-actions').getBoundingClientRect();
+      return { panel: { x: panel.x, y: panel.y, width: panel.width, height: panel.height }, listHeight: list.height, actionsVisible: actions.bottom <= innerHeight, natureVisible: nature.top >= list.top && nature.bottom <= list.bottom, noOverflow: document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight };
+    });
+    assert.equal(geometry.actionsVisible, true, JSON.stringify({ viewport, geometry }));
+    assert.equal(geometry.noOverflow, true, JSON.stringify({ viewport, geometry }));
+    assert.equal(geometry.natureVisible, true, JSON.stringify({ viewport, geometry }));
+    if (viewport.width <= 700) assert.ok(geometry.panel.height <= Math.min(260, viewport.height * .34) + 1, JSON.stringify({ viewport, geometry }));
+    if (process.env.MAP_SCREENSHOTS) await placesPage.screenshot({ path: `${process.env.MAP_SCREENSHOTS}/places-nature-${viewport.width}x${viewport.height}.png` });
+  }
+  await placesPage.setViewportSize({ width: 390, height: 844 });
+  await placesPage.locator('#edit-place').click();
+  await placesPage.locator('#place-label').fill('保留草稿');
+  await placesPage.locator('#close-places').click();
+  await toggleTheme(placesPage);
+  await placesPage.locator('#toggle-places').click();
+  assert.equal(await placesPage.locator('#place-label').inputValue(), '保留草稿');
+  assert.equal(await placesPage.locator('.place-button[aria-pressed=true]').getAttribute('data-place-id'), 'place-000');
+  await placesPage.locator('#cancel-edit').click();
+  await namePlace('place-000', '合成合并地点');
+  await namePlace('place-090', '奥森南门');
+  await placesPage.locator('#clear-selection').click();
+  await placesPage.locator('#places').evaluate(element => { element.scrollTop = 0; });
+  await placesPage.locator('.place-button[data-place-id="place-090"]').click();
+  assert.equal(await placesPage.locator('.nature-stat').evaluate(element => {
+    const row = element.getBoundingClientRect(), list = document.querySelector('#places').getBoundingClientRect();
+    return row.top >= list.top && row.bottom <= list.bottom;
+  }), true, 'Selecting a scrolled nature row must reveal its full statistic after the detail opens.');
+  await placesPage.locator('.place-method > summary').click();
+  assert.equal(await placesPage.locator('.place-method p').isVisible(), true);
+  assert.match(await placesPage.locator('.place-method p').textContent(), /车辆停放/);
+  assert.equal(await placesPage.locator('.place-method p').evaluate(element => { const box = element.getBoundingClientRect(); return box.top >= 56 && box.bottom <= innerHeight && box.left >= 0 && box.right <= innerWidth; }), true);
+  assert.deepEqual(placeErrors, []);
+  await placesContext.close();
+  console.log(JSON.stringify({ passed: true, checks: ['named-marker-beyond-list-100', 'explicit-merge-rename-reload-clear', 'same-label-separate', 'badminton-day-dedup', 'nature-exact-seconds-display', 'bounded-mobile-panel-four-viewports', 'local-smiley-font', 'theme-icon-centered-three-widths', 'menu-selected-row-contained', 'rounded-svg-controls', 'cue-monotonic-expiry', 'cue-renewal-preserves-edit', 'cue-rapid-selection', 'cue-locate-renewal', 'cue-reduced-motion', 'temporary-unnamed-selected-pin', 'default-system', 'theme-persistence-reload', 'theme-preserves-view-and-unsaved-label', 'blocked-storage-toggle', 'short-settings-disclosure', 'both-theme-contrast', 'desktop', 'mobile', 'mobile-activity-navigation-390-320', 'counts', 'no-date-filter', 'labels-persist', 'invalid-source-preserves', 'area-hover', 'raw-coordinates-basemap-toggle', 'visible-base-and-repeat-contrast', 'contrast', 'no-external-network', 'no-page-errors', 'online-layer-cleanup', 'two-layer-switches-only', 'quiet-label-scale', 'tiny-svg-markers', 'marker-opens-panel', 'fractional-tile-rendering-dpr1-dpr2', 'light-repeat-deepening', 'keyboard-marker-selection', 'delayed-tile-continuity', 'stable-place-reselection', 'drawer-draft-and-focus', 'route-contrast-two-themes-multiple-zooms'], font, fonts, themeMeasurements, cue: { cueId, initialCueDeadline, renewedCueDeadline, expiredAt, selectedPin }, contrast, overlapBrightnessRatio: +(six / one).toFixed(2) }, null, 2));
 } finally {
   try { await browser?.close(); } finally {
     if (server.exitCode === null && server.signalCode === null) await new Promise(resolve => {

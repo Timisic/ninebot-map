@@ -102,6 +102,7 @@ function validatePublic(data) {
     assert(typeof track.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(track.date), '公开轨迹日期无效');
     timestamp(`${track.date}T00:00:00Z`);
     assert(number(track.distance_m, true), '公开轨迹里程无效');
+    assert(!Object.hasOwn(track, 'stop_duration_s') || (number(track.stop_duration_s, true) && (track.stop_duration_s === null || track.stop_duration_s <= 86400)), '公开停留时长无效');
     assert(Array.isArray(track.points) && track.points.length >= 2, '公开轨迹点无效');
     points += track.points.length;
     assert(points <= LIMITS.points, '公开轨迹点超限');
@@ -198,9 +199,86 @@ export function clusterEndpoints(endpoints, radius = DESTINATION_METERS) {
   return Object.freeze(clusters.sort((a, b) => b.memberIds.length - a.memberIds.length || a.id.localeCompare(b.id, 'en')).map((c, index) => Object.freeze({ ...c, defaultLabel: `地点 ${index + 1}` })));
 }
 
-export function resolvePlaceLabel(place, labels) {
+function customPlaceLabel(place, labels) {
   const names = new Set(place.memberIds.filter(id => Object.hasOwn(labels, id)).map(id => labels[id]).filter(value => typeof value === 'string' && value.length));
-  return names.size === 1 ? [...names][0] : place.defaultLabel;
+  return names.size === 1 ? [...names][0] : null;
+}
+export function resolvePlaceLabel(place, labels) { return customPlaceLabel(place, labels) ?? place.defaultLabel; }
+
+function mergedMemberIds(merges, memberIds) {
+  const members = new Set(memberIds);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const group of merges) {
+      if (!group.memberIds.some(id => members.has(id))) continue;
+      for (const id of group.memberIds) if (!members.has(id)) { members.add(id); changed = true; }
+    }
+  }
+  return [...members].sort();
+}
+
+export function mergePlaceGroups(merges, source, target) {
+  const memberIds = mergedMemberIds(merges, [...source.memberIds, ...target.memberIds]);
+  const members = new Set(memberIds);
+  return [...merges.filter(group => !group.memberIds.some(id => members.has(id))), { anchorId: target.id, memberIds }];
+}
+
+export function renamePlace(place, label, labels, merges) {
+  const renamed = { ...labels };
+  for (const id of mergedMemberIds(merges, place.memberIds)) {
+    delete renamed[id];
+    if (label) Object.defineProperty(renamed, id, { value: label, enumerable: true, writable: true, configurable: true });
+  }
+  return renamed;
+}
+
+export function mergeDestinations(destinations, merges = []) {
+  const byId = new Map(destinations.map(place => [place.id, place]));
+  const parent = new Map(destinations.map(place => [place.id, place.id]));
+  const byMember = new Map(destinations.flatMap(place => place.memberIds.map(id => [id, place.id])));
+  const root = id => { while (parent.get(id) !== id) id = parent.get(id); return id; };
+  for (const merge of merges) {
+    const ids = [...new Set(merge.memberIds.map(id => byMember.get(id)).filter(Boolean))];
+    const target = byMember.get(merge.anchorId) || ids[0];
+    if (!target) continue;
+    const anchor = root(target);
+    for (const id of ids) parent.set(root(id), anchor);
+  }
+  const groups = new Map();
+  for (const place of destinations) {
+    const id = root(place.id);
+    if (!groups.has(id)) groups.set(id, []);
+    groups.get(id).push(place);
+  }
+  return [...groups].map(([id, places]) => {
+    const savedAnchor = merges.findLast(merge => byMember.has(merge.anchorId) && root(byMember.get(merge.anchorId)) === id)?.anchorId;
+    return { ...byId.get(id), id: savedAnchor ?? id, memberIds: places.flatMap(place => place.memberIds).sort() };
+  });
+}
+
+export function stopDurations(data) {
+  const result = new Map(data.rides.map(ride => [ride.id, null]));
+  const monthsWithIncompleteChronology = new Set(data.months.filter(month => month.list_complete !== true).map(month => month.month));
+  for (const month of data.rides.filter(ride => ride.started_at === null).map(ride => ride.source_month)) monthsWithIncompleteChronology.add(month);
+  const tracks = new Map(data.tracks.map(track => [track.ride_id, track.points]));
+  const rides = data.rides.filter(ride => ride.started_at !== null).slice().sort((a, b) => Date.parse(a.started_at) - Date.parse(b.started_at) || a.id.localeCompare(b.id, 'en'));
+  let previousEnd = -Infinity;
+  for (let i = 0; i < rides.length - 1; i++) {
+    if (i > 0 && rides[i - 1].ended_at) previousEnd = Math.max(previousEnd, Date.parse(rides[i - 1].ended_at));
+    const arrival = rides[i], departure = rides[i + 1];
+    const arrivingPoints = tracks.get(arrival.id), leavingPoints = tracks.get(departure.id);
+    if (!arrival.ended_at || !arrivingPoints || !leavingPoints) continue;
+    if (Date.parse(arrival.started_at) < previousEnd || Date.parse(arrival.started_at) === Date.parse(departure.started_at)) continue;
+    if (monthsWithIncompleteChronology.has(arrival.source_month) || monthsWithIncompleteChronology.has(departure.source_month)) continue;
+    const seconds = (Date.parse(departure.started_at) - Date.parse(arrival.ended_at)) / 1000;
+    if (seconds < 0 || seconds > 86400) continue;
+    const a = arrivingPoints.at(-1), b = leavingPoints[0];
+    const latitude = (a.latitude + b.latitude) * Math.PI / 360;
+    const distance = Math.hypot((a.longitude - b.longitude) * Math.cos(latitude), a.latitude - b.latitude) * METERS_PER_DEGREE;
+    if (distance <= DESTINATION_METERS) result.set(arrival.id, seconds);
+  }
+  return result;
 }
 
 export function tilesAllowed(interpretation) { return ['wgs84', 'gcj02', 'bd09'].includes(interpretation); }
@@ -243,7 +321,8 @@ export function readRideMap(input, interpretation) {
     const parts = Object.fromEntries(dateFormatter.formatToParts(new Date(value)).map(p => [p.type, p.value]));
     return `${parts.year}-${parts.month}-${parts.day}`;
   };
-  const ridesById = new Map((publicMap ? data.tracks : data.rides).map(ride => [ride.id, Object.freeze({ id: ride.id, distance: ride.distance_m, date: publicMap ? ride.date : dateFor(ride.started_at) })]));
+  const stops = publicMap ? new Map(data.tracks.map(track => [track.id, track.stop_duration_s ?? null])) : stopDurations(data);
+  const ridesById = new Map((publicMap ? data.tracks : data.rides).map(ride => [ride.id, Object.freeze({ id: ride.id, distance: ride.distance_m, date: publicMap ? ride.date : dateFor(ride.started_at), stopDurationS: stops.get(ride.id) })]));
   const tracks = [], endpoints = [];
   let gaps = 0, expansion = 0;
   for (const track of displayTracks.slice().sort((a, b) => a.ride_id.localeCompare(b.ride_id, 'en'))) {
@@ -269,7 +348,7 @@ export function readRideMap(input, interpretation) {
   }
   const destinations = clusterEndpoints(endpoints);
   const dates = tracks.map(t => t.date).sort();
-  const select = ({ from = '', to = '' } = {}) => {
+  const select = ({ from = '', to = '', labels = {}, merges = [] } = {}) => {
     assert(!from || /^\d{4}-\d{2}-\d{2}$/.test(from), '开始日期无效');
     assert(!to || /^\d{4}-\d{2}-\d{2}$/.test(to), '结束日期无效');
     if (from) timestamp(`${from}T00:00:00Z`);
@@ -278,12 +357,18 @@ export function readRideMap(input, interpretation) {
     const visible = tracks.filter(t => (!from || t.date >= from) && (!to || t.date <= to));
     const ids = new Set(visible.map(t => t.id)), passages = new Map();
     for (const track of visible) for (const cell of track.cells) passages.set(cell, (passages.get(cell) || 0) + 1);
-    const places = destinations.map(place => {
+    const badmintonDays = new Set();
+    const places = mergeDestinations(destinations, merges).map(place => {
       const memberIds = place.memberIds.filter(id => ids.has(id));
       const days = new Set(memberIds.map(id => ridesById.get(id).date));
-      return { ...place, visibleMemberIds: memberIds, count: memberIds.length, days: days.size };
+      const label = customPlaceLabel(place, labels), named = label !== null;
+      const activityKind = label?.includes('🏸') ? 'badminton' : label?.replace(/\s/g, '').includes('奥森南门') ? 'nature' : null;
+      if (activityKind === 'badminton') for (const day of days) badmintonDays.add(day);
+      const stops = memberIds.map(id => ridesById.get(id).stopDurationS);
+      const knownStopCount = stops.filter(seconds => seconds !== null).length;
+      return { ...place, label: label ?? place.defaultLabel, named, activityKind, visibleMemberIds: memberIds, count: memberIds.length, days: days.size, stopDurationS: knownStopCount ? sumKnown(stops) : null, knownStopCount, unknownStopCount: memberIds.length - knownStopCount };
     }).filter(p => p.count).sort((a, b) => b.count - a.count || a.id.localeCompare(b.id, 'en'));
-    return { tracks: visible, passages, destinations: places, rideCount: visible.length, distance: sum(visible.map(t => t.distance)) };
+    return { tracks: visible, passages, destinations: places, badmintonDays: badmintonDays.size, rideCount: visible.length, distance: sum(visible.map(t => t.distance)) };
   };
   return Object.freeze({ datasetId: data.dataset_id, updatedAt: data.updated_at || data.generated_at, declaredCrs: data.coordinate_system, interpretation: crs, timezone: data.timezone, totals, diagnostics: Object.freeze({ gaps, excluded: totals.ride_count - tracks.length }), dateBounds: Object.freeze([dates[0] || '', dates.at(-1) || '']), destinations, select, cellAt(latitude, longitude) { const xy = project({ latitude, longitude }); return `${Math.floor(xy[0] / GRID_METERS)},${Math.floor(xy[1] / GRID_METERS)}`; }, cellBounds(key) { const [x, y] = key.split(',').map(Number); return [unproject(x * GRID_METERS, y * GRID_METERS), unproject((x + 1) * GRID_METERS, (y + 1) * GRID_METERS)]; } });
 }

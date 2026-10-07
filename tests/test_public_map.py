@@ -24,12 +24,25 @@ class PublicMapTests(unittest.TestCase):
     def setUp(self):
         self.dataset = json.loads(FIXTURE.read_text())
 
+    def test_deployment_bundle_runs_without_the_source_checkout(self):
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as directory:
+            bundle = Path(directory) / 'bundle'
+            subprocess.run([sys.executable, str(root / 'scripts/build-site-bundle.py'),
+                            '--dataset', str(FIXTURE.resolve()), '--output', str(bundle)],
+                           check=True, capture_output=True, cwd=directory)
+            for script in ('serve-public-map.py', 'receive-public-map.py'):
+                result = subprocess.run([sys.executable, '-I', str(bundle / 'code/scripts' / script), '--help'],
+                                        capture_output=True, text=True, cwd=directory)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn('usage:', result.stdout)
+
     def test_export_only_contains_map_fields_and_aggregate_history(self):
         self.dataset['private_note'] = 'PRIVATE_SENTINEL'
         self.dataset['rides'][0]['account'] = 'ACCOUNT_SENTINEL'
         result = public_dataset(self.dataset)
         raw = json.dumps(result)
-        for private in ['PRIVATE_SENTINEL', 'ACCOUNT_SENTINEL', self.dataset['dataset_id'], 'started_at', 'ended_at', 'source_month', 'snapshot_ids', 'duration_s', 'speed_mps']:
+        for private in ['PRIVATE_SENTINEL', 'ACCOUNT_SENTINEL', self.dataset['dataset_id'], 'started_at', 'ended_at', 'source_month', 'snapshot_ids', '"duration_s"', 'speed_mps']:
             self.assertNotIn(private, raw)
         self.assertEqual(result['summary'], self.dataset['summary'])
         self.assertEqual(result['tracks'][0]['points'][0], [self.dataset['tracks'][0]['points'][0]['longitude'], self.dataset['tracks'][0]['points'][0]['latitude']])

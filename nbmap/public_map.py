@@ -10,6 +10,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from .dataset import validate_dataset
+from .stops import stop_durations
 from .map_server import MAX_BYTES
 from .viewer_resources import WEB_ROOT, viewer_resources
 
@@ -22,6 +23,7 @@ def public_dataset(dataset, updated_at=None):
     validate_dataset(dataset)
     zone = ZoneInfo(dataset['timezone'])
     rides = {ride['id']: ride for ride in dataset['rides']}
+    stops = stop_durations(dataset)
     result = {'format': FORMAT, 'schema_version': 1, 'dataset_id': 'ninebot-public-map',
               'updated_at': updated_at or dataset['generated_at'], 'timezone': dataset['timezone'],
               'coordinate_system': dataset['coordinate_system'],
@@ -30,7 +32,7 @@ def public_dataset(dataset, updated_at=None):
         ride = rides[track['ride_id']]
         result['tracks'].append({'id': ride['id'] if re.fullmatch(r'r_[a-f0-9]{24}', ride['id']) else 'r_' + hashlib.sha256(ride['id'].encode()).hexdigest()[:24],
                                 'date': datetime.fromisoformat(ride['started_at']).astimezone(zone).date().isoformat(),
-                                'distance_m': ride['distance_m'],
+                                'distance_m': ride['distance_m'], 'stop_duration_s': stops[ride['id']],
                                 'points': [[point['longitude'], point['latitude']] for point in track['points']]})
     validate_public(result)
     return result
@@ -66,12 +68,13 @@ def validate_public(data):
     min_lon = min_lat = float('inf')
     max_lon = max_lat = float('-inf')
     for track in data['tracks']:
-        require(isinstance(track, dict) and set(track) == {'id', 'date', 'distance_m', 'points'}, '公开轨迹字段无效')
+        require(isinstance(track, dict) and {'id', 'date', 'distance_m', 'points'} <= set(track) <= {'id', 'date', 'distance_m', 'points', 'stop_duration_s'}, '公开轨迹字段无效')
         require(isinstance(track['id'], str) and re.fullmatch(r'r_[a-f0-9]{24}', track['id']) and track['id'] not in ids, '公开轨迹标识无效')
         ids.add(track['id'])
         require(isinstance(track['date'], str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}', track['date']), '公开日期无效')
         datetime.strptime(track['date'], '%Y-%m-%d')
         require(number(track['distance_m'], True), '公开轨迹里程无效')
+        require('stop_duration_s' not in track or (number(track['stop_duration_s'], True) and (track['stop_duration_s'] is None or track['stop_duration_s'] <= 86400)), '公开停留时长无效')
         distances.append(track['distance_m'])
         require(isinstance(track['points'], list) and len(track['points']) >= 2, '公开轨迹点无效')
         count += len(track['points'])
@@ -134,7 +137,7 @@ def export_site(dataset, output, updated_at=None):
             target = temporary / filename
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(body)
-        for relative in ('leaflet/LICENSE', 'gcoord/LICENSE', 'lucide/LICENSE'):
+        for relative in ('leaflet/LICENSE', 'gcoord/LICENSE', 'lucide/LICENSE', 'pinhead/LICENSE', 'pinhead/PROVENANCE.md'):
             target = temporary / 'vendor' / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(WEB_ROOT / 'vendor' / relative, target)

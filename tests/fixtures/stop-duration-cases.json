@@ -1,0 +1,834 @@
+[
+  {
+    "name": "exact seconds across nearby endpoints",
+    "data": {
+      "rides": [
+        {
+          "id": "a",
+          "started_at": "2026-01-01T10:00:00Z",
+          "ended_at": "2026-01-01T10:10:00Z",
+          "source_month": "202601"
+        },
+        {
+          "id": "b",
+          "started_at": "2026-01-01T11:10:35Z",
+          "ended_at": "2026-01-01T11:20:00Z",
+          "source_month": "202601"
+        }
+      ],
+      "tracks": [
+        {
+          "ride_id": "a",
+          "points": [
+            {
+              "longitude": -0.0008993203637245379,
+              "latitude": 0
+            },
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            }
+          ]
+        },
+        {
+          "ride_id": "b",
+          "points": [
+            {
+              "longitude": 0.0008903271600872925,
+              "latitude": 0
+            },
+            {
+              "longitude": 0.0017986407274490758,
+              "latitude": 0
+            }
+          ]
+        }
+      ],
+      "months": [
+        {
+          "month": "202601",
+          "list_complete": true
+        }
+      ]
+    },
+    "expected": {
+      "a": 3635,
+      "b": null
+    }
+  },
+  {
+    "name": "distant departure is unknown",
+    "data": {
+      "rides": [
+        {
+          "id": "a",
+          "started_at": "2026-01-01T10:00:00Z",
+          "ended_at": "2026-01-01T10:10:00Z",
+          "source_month": "202601"
+        },
+        {
+          "id": "b",
+          "started_at": "2026-01-01T11:10:35Z",
+          "ended_at": "2026-01-01T11:20:00Z",
+          "source_month": "202601"
+        }
+      ],
+      "tracks": [
+        {
+          "ride_id": "a",
+          "points": [
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            },
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            }
+          ]
+        },
+        {
+          "ride_id": "b",
+          "points": [
+            {
+              "longitude": 0.0009083135673617833,
+              "latitude": 0
+            },
+            {
+              "longitude": 0.0017986407274490758,
+              "latitude": 0
+            }
+          ]
+        }
+      ],
+      "months": [
+        {
+          "month": "202601",
+          "list_complete": true
+        }
+      ]
+    },
+    "expected": {
+      "a": null,
+      "b": null
+    }
+  },
+  {
+    "name": "untracked intervening ride blocks pairing",
+    "data": {
+      "rides": [
+        {
+          "id": "a",
+          "started_at": "2026-01-01T10:00:00Z",
+          "ended_at": "2026-01-01T10:10:00Z",
+          "source_month": "202601"
+        },
+        {
+          "id": "b",
+          "started_at": "2026-01-01T11:10:35Z",
+          "ended_at": "2026-01-01T11:20:00Z",
+          "source_month": "202601"
+        },
+        {
+          "id": "c",
+          "started_at": "2026-01-01T12:00:00Z",
+          "ended_at": "2026-01-01T12:10:00Z",
+          "source_month": "202601"
+        }
+      ],
+      "tracks": [
+        {
+          "ride_id": "a",
+          "points": [
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            },
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            }
+          ]
+        },
+        {
+          "ride_id": "c",
+          "points": [
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            },
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            }
+          ]
+        }
+      ],
+      "months": [
+        {
+          "month": "202601",
+          "list_complete": true
+        }
+      ]
+    },
+    "expected": {
+      "a": null,
+      "b": null,
+      "c": null
+    }
+  },
+  {
+    "name": "missing end is unknown",
+    "data": {
+      "rides": [
+        {
+          "id": "a",
+          "started_at": "2026-01-01T10:00:00Z",
+          "ended_at": null,
+          "source_month": "202601"
+        },
+        {
+          "id": "b",
+          "started_at": "2026-01-01T11:10:35Z",
+          "ended_at": "2026-01-01T11:20:00Z",
+          "source_month": "202601"
+        }
+      ],
+      "tracks": [
+        {
+          "ride_id": "a",
+          "points": [
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            },
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            }
+          ]
+        },
+        {
+          "ride_id": "b",
+          "points": [
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            },
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            }
+          ]
+        }
+      ],
+      "months": [
+        {
+          "month": "202601",
+          "list_complete": true
+        }
+      ]
+    },
+    "expected": {
+      "a": null,
+      "b": null
+    }
+  },
+  {
+    "name": "overlap is unknown",
+    "data": {
+      "rides": [
+        {
+          "id": "a",
+          "started_at": "2026-01-01T10:00:00Z",
+          "ended_at": "2026-01-01T11:15:00Z",
+          "source_month": "202601"
+        },
+        {
+          "id": "b",
+          "started_at": "2026-01-01T11:10:35Z",
+          "ended_at": "2026-01-01T11:20:00Z",
+          "source_month": "202601"
+        }
+      ],
+      "tracks": [
+        {
+          "ride_id": "a",
+          "points": [
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            },
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            }
+          ]
+        },
+        {
+          "ride_id": "b",
+          "points": [
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            },
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            }
+          ]
+        }
+      ],
+      "months": [
+        {
+          "month": "202601",
+          "list_complete": true
+        }
+      ]
+    },
+    "expected": {
+      "a": null,
+      "b": null
+    }
+  },
+  {
+    "name": "earlier spanning ride blocks nested pair",
+    "data": {
+      "rides": [
+        {
+          "id": "a",
+          "started_at": "2026-01-01T10:00:00Z",
+          "ended_at": "2026-01-01T13:00:00Z",
+          "source_month": "202601"
+        },
+        {
+          "id": "b",
+          "started_at": "2026-01-01T11:10:35Z",
+          "ended_at": "2026-01-01T11:20:00Z",
+          "source_month": "202601"
+        },
+        {
+          "id": "c",
+          "started_at": "2026-01-01T12:00:00Z",
+          "ended_at": "2026-01-01T12:10:00Z",
+          "source_month": "202601"
+        }
+      ],
+      "tracks": [
+        {
+          "ride_id": "a",
+          "points": [
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            },
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            }
+          ]
+        },
+        {
+          "ride_id": "b",
+          "points": [
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            },
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            }
+          ]
+        },
+        {
+          "ride_id": "c",
+          "points": [
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            },
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            }
+          ]
+        }
+      ],
+      "months": [
+        {
+          "month": "202601",
+          "list_complete": true
+        }
+      ]
+    },
+    "expected": {
+      "a": null,
+      "b": null,
+      "c": null
+    }
+  },
+  {
+    "name": "zero is a known duration",
+    "data": {
+      "rides": [
+        {
+          "id": "a",
+          "started_at": "2026-01-01T10:00:00Z",
+          "ended_at": "2026-01-01T10:10:00Z",
+          "source_month": "202601"
+        },
+        {
+          "id": "b",
+          "started_at": "2026-01-01T10:10:00Z",
+          "ended_at": "2026-01-01T11:20:00Z",
+          "source_month": "202601"
+        }
+      ],
+      "tracks": [
+        {
+          "ride_id": "a",
+          "points": [
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            },
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            }
+          ]
+        },
+        {
+          "ride_id": "b",
+          "points": [
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            },
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            }
+          ]
+        }
+      ],
+      "months": [
+        {
+          "month": "202601",
+          "list_complete": true
+        }
+      ]
+    },
+    "expected": {
+      "a": 0,
+      "b": null
+    }
+  },
+  {
+    "name": "tied starts are unknown",
+    "data": {
+      "rides": [
+        {
+          "id": "a",
+          "started_at": "2026-01-01T10:00:00Z",
+          "ended_at": "2026-01-01T10:00:00Z",
+          "source_month": "202601"
+        },
+        {
+          "id": "b",
+          "started_at": "2026-01-01T10:00:00Z",
+          "ended_at": "2026-01-01T11:20:00Z",
+          "source_month": "202601"
+        }
+      ],
+      "tracks": [
+        {
+          "ride_id": "a",
+          "points": [
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            },
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            }
+          ]
+        },
+        {
+          "ride_id": "b",
+          "points": [
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            },
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            }
+          ]
+        }
+      ],
+      "months": [
+        {
+          "month": "202601",
+          "list_complete": true
+        }
+      ]
+    },
+    "expected": {
+      "a": null,
+      "b": null
+    }
+  },
+  {
+    "name": "same month undated ride blocks certainty",
+    "data": {
+      "rides": [
+        {
+          "id": "a",
+          "started_at": "2026-01-01T10:00:00Z",
+          "ended_at": "2026-01-01T10:10:00Z",
+          "source_month": "202601"
+        },
+        {
+          "id": "b",
+          "started_at": "2026-01-01T11:10:35Z",
+          "ended_at": "2026-01-01T11:20:00Z",
+          "source_month": "202601"
+        },
+        {
+          "id": "c",
+          "started_at": null,
+          "ended_at": "2026-01-01T12:10:00Z",
+          "source_month": "202601"
+        }
+      ],
+      "tracks": [
+        {
+          "ride_id": "a",
+          "points": [
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            },
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            }
+          ]
+        },
+        {
+          "ride_id": "b",
+          "points": [
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            },
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            }
+          ]
+        }
+      ],
+      "months": [
+        {
+          "month": "202601",
+          "list_complete": true
+        }
+      ]
+    },
+    "expected": {
+      "a": null,
+      "b": null,
+      "c": null
+    }
+  },
+  {
+    "name": "cross midnight timestamps retain timezone precision",
+    "data": {
+      "rides": [
+        {
+          "id": "a",
+          "started_at": "2026-01-01T23:00:00+08:00",
+          "ended_at": "2026-01-01T23:59:35+08:00",
+          "source_month": "202601"
+        },
+        {
+          "id": "b",
+          "started_at": "2026-01-01T16:01:05Z",
+          "ended_at": "2026-01-01T16:10:00Z",
+          "source_month": "202601"
+        }
+      ],
+      "tracks": [
+        {
+          "ride_id": "a",
+          "points": [
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            },
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            }
+          ]
+        },
+        {
+          "ride_id": "b",
+          "points": [
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            },
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            }
+          ]
+        }
+      ],
+      "months": [
+        {
+          "month": "202601",
+          "list_complete": true
+        }
+      ]
+    },
+    "expected": {
+      "a": 90,
+      "b": null
+    }
+  },
+  {
+    "name": "more than a day is unknown",
+    "data": {
+      "rides": [
+        {
+          "id": "a",
+          "started_at": "2026-01-01T10:00:00Z",
+          "ended_at": "2026-01-01T10:10:00Z",
+          "source_month": "202601"
+        },
+        {
+          "id": "b",
+          "started_at": "2026-01-02T10:10:01Z",
+          "ended_at": "2026-01-02T10:20:00Z",
+          "source_month": "202601"
+        }
+      ],
+      "tracks": [
+        {
+          "ride_id": "a",
+          "points": [
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            },
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            }
+          ]
+        },
+        {
+          "ride_id": "b",
+          "points": [
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            },
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            }
+          ]
+        }
+      ],
+      "months": [
+        {
+          "month": "202601",
+          "list_complete": true
+        }
+      ]
+    },
+    "expected": {
+      "a": null,
+      "b": null
+    }
+  },
+  {
+    "name": "exactly one day accepted",
+    "data": {
+      "rides": [
+        {
+          "id": "a",
+          "started_at": "2026-01-01T10:00:00Z",
+          "ended_at": "2026-01-01T10:10:00Z",
+          "source_month": "202601"
+        },
+        {
+          "id": "b",
+          "started_at": "2026-01-02T10:10:00Z",
+          "ended_at": "2026-01-02T10:20:00Z",
+          "source_month": "202601"
+        }
+      ],
+      "tracks": [
+        {
+          "ride_id": "a",
+          "points": [
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            },
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            }
+          ]
+        },
+        {
+          "ride_id": "b",
+          "points": [
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            },
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            }
+          ]
+        }
+      ],
+      "months": [
+        {
+          "month": "202601",
+          "list_complete": true
+        }
+      ]
+    },
+    "expected": {
+      "a": 86400,
+      "b": null
+    }
+  },
+  {
+    "name": "incomplete month is unknown False",
+    "data": {
+      "rides": [
+        {
+          "id": "a",
+          "started_at": "2026-01-01T10:00:00Z",
+          "ended_at": "2026-01-01T10:10:00Z",
+          "source_month": "202601"
+        },
+        {
+          "id": "b",
+          "started_at": "2026-01-01T11:10:35Z",
+          "ended_at": "2026-01-01T11:20:00Z",
+          "source_month": "202601"
+        }
+      ],
+      "tracks": [
+        {
+          "ride_id": "a",
+          "points": [
+            {
+              "longitude": -0.0008993203637245379,
+              "latitude": 0
+            },
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            }
+          ]
+        },
+        {
+          "ride_id": "b",
+          "points": [
+            {
+              "longitude": 0.0008903271600872925,
+              "latitude": 0
+            },
+            {
+              "longitude": 0.0017986407274490758,
+              "latitude": 0
+            }
+          ]
+        }
+      ],
+      "months": [
+        {
+          "month": "202601",
+          "list_complete": false
+        }
+      ]
+    },
+    "expected": {
+      "a": null,
+      "b": null
+    }
+  },
+  {
+    "name": "incomplete month is unknown None",
+    "data": {
+      "rides": [
+        {
+          "id": "a",
+          "started_at": "2026-01-01T10:00:00Z",
+          "ended_at": "2026-01-01T10:10:00Z",
+          "source_month": "202601"
+        },
+        {
+          "id": "b",
+          "started_at": "2026-01-01T11:10:35Z",
+          "ended_at": "2026-01-01T11:20:00Z",
+          "source_month": "202601"
+        }
+      ],
+      "tracks": [
+        {
+          "ride_id": "a",
+          "points": [
+            {
+              "longitude": -0.0008993203637245379,
+              "latitude": 0
+            },
+            {
+              "longitude": 0.0,
+              "latitude": 0
+            }
+          ]
+        },
+        {
+          "ride_id": "b",
+          "points": [
+            {
+              "longitude": 0.0008903271600872925,
+              "latitude": 0
+            },
+            {
+              "longitude": 0.0017986407274490758,
+              "latitude": 0
+            }
+          ]
+        }
+      ],
+      "months": [
+        {
+          "month": "202601",
+          "list_complete": null
+        }
+      ]
+    },
+    "expected": {
+      "a": null,
+      "b": null
+    }
+  }
+]

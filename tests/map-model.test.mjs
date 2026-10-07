@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { readRideMap, segmentCells, clusterEndpoints, tilesAllowed, displayCoordinate } from '../web/model.mjs';
+import { readRideMap, stopDurations, mergeDestinations, mergePlaceGroups, renamePlace, segmentCells, clusterEndpoints, tilesAllowed, displayCoordinate } from '../web/model.mjs';
 import { makeDataset } from './map-fixture.mjs';
 const cells = result => [...result].sort();
 test('grid traversal counts crossed interiors, exact corners, negative cells and duplicate points', () => {
@@ -116,4 +116,88 @@ test('public map keeps aggregates separate and rejects unreadable update timesta
   assert.deepEqual(readRideMap(data).totals, local.summary);
   assert.throws(() => readRideMap({ ...data, updated_at: '2026-10-05 08:00:00+00:00' }), /时间/);
   assert.throws(() => readRideMap({ ...data, summary: { ...data.summary, total_distance_m: 0, known_distance_m: 0, missing_distance_count: 999 } }), /里程/);
+});
+
+
+test('parking duration matches shared exact-seconds cases without skipping rides', () => {
+  const cases = JSON.parse(fs.readFileSync(new URL('./fixtures/stop-duration-cases.json', import.meta.url)));
+  for (const { name, data, expected } of cases) {
+    assert.deepEqual(Object.fromEntries(stopDurations(data)), expected, name);
+    data.rides.reverse();
+    assert.deepEqual(Object.fromEntries(stopDurations(data)), expected, `${name} reordered`);
+  }
+});
+
+test('explicit merge groups preserve identity, distinct equal names and day unions before filtering', () => {
+  const model = readRideMap(makeDataset([
+    { id: 'a', xy: [[0, 0], [10, 0]], date: '2026-01-01' },
+    { id: 'b', xy: [[0, 0], [300, 0]], date: '2026-01-01' },
+    { id: 'c', xy: [[0, 0], [600, 0]], date: '2026-01-02' },
+    { id: 'd', xy: [[0, 0], [900, 0]], date: '2026-01-02' },
+  ]));
+  const labels = { a: '球馆🏸', b: '球馆🏸', c: '球馆🏸', d: '地点 4' };
+  assert.equal(model.select({ labels }).destinations.length, 4);
+  assert.equal(model.select({ labels }).badmintonDays, 2);
+  assert.equal(model.select({ labels }).destinations.find(p => p.id === 'd').named, true);
+  const merges = [{ anchorId: 'b', memberIds: ['a', 'b'] }, { anchorId: 'c', memberIds: ['b', 'c'] }];
+  const merged = model.select({ labels, merges });
+  assert.equal(merged.destinations.length, 2);
+  assert.equal(merged.destinations[0].id, 'c');
+  assert.deepEqual(merged.destinations[0].memberIds, ['a', 'b', 'c']);
+  assert.equal(merged.destinations[0].days, 2);
+  assert.equal(merged.destinations[0].count, 3);
+  const filtered = model.select({ labels, merges, from: '2026-01-02' });
+  assert.deepEqual(filtered.destinations.find(p => p.id === 'c').visibleMemberIds, ['c']);
+  assert.equal(filtered.badmintonDays, 1);
+  assert.deepEqual(model.select({ merges }).destinations[0].memberIds, ['a', 'b', 'c']);
+  assert.equal(model.select({ merges }).destinations[0].named, false);
+  const reanchored = [{ id: 'new', anchor: [0, 0], memberIds: ['a', 'b', 'c', 'new'], defaultLabel: '地点 1' }];
+  assert.equal(mergeDestinations(reanchored, merges)[0].id, 'c');
+});
+
+test('public nature totals preserve seconds, distinguish zero and missing, and reject invalid duration', () => {
+  const local = makeDataset(Array.from({ length: 4 }, (_, i) => ({ id: String(i), xy: [[0, 0], [10, 0]] })));
+  const publicData = { format: 'public-ride-map', schema_version: 1, dataset_id: 'ninebot-public-map', updated_at: local.generated_at, timezone: 'Asia/Shanghai', coordinate_system: local.coordinate_system, summary: local.summary,
+    tracks: local.tracks.map((track, i) => ({ id: 'r_' + String(i).repeat(24), date: '2026-01-01', distance_m: 1000, points: track.points.map(p => [p.longitude, p.latitude]), ...i < 3 ? { stop_duration_s: [45, 45, 0][i] } : {} })) };
+  const id = publicData.tracks[0].id;
+  const place = readRideMap(publicData).select({ labels: { [id]: '奥森 南门' } }).destinations[0];
+  assert.equal(place.activityKind, 'nature');
+  assert.equal(place.stopDurationS, 90);
+  assert.equal(place.knownStopCount, 3);
+  assert.equal(place.unknownStopCount, 1);
+  assert.equal(Math.floor(place.stopDurationS / 60), 1);
+  for (const invalid of [-1, true, 86401, NaN, '30']) {
+    const copy = structuredClone(publicData); copy.tracks[0].stop_duration_s = invalid;
+    assert.throws(() => readRideMap(copy), /停留/);
+  }
+  for (const track of publicData.tracks) delete track.stop_duration_s;
+  assert.equal(readRideMap(publicData).select({ labels: { [id]: '奥森南门' } }).destinations[0].stopDurationS, null);
+});
+
+
+test('a second merge retains temporarily absent historical members transitively', () => {
+  const merges = mergePlaceGroups([{ anchorId: 'b', memberIds: ['a', 'b'] }, { anchorId: 'z', memberIds: ['z', 'a'] }],
+    { id: 'b', memberIds: ['b'] }, { id: 'c', memberIds: ['c'] });
+  assert.deepEqual(merges, [{ anchorId: 'c', memberIds: ['a', 'b', 'c', 'z'] }]);
+  const restored = ['a', 'b', 'c', 'z'].map(id => ({ id, memberIds: [id], anchor: [0, 0], defaultLabel: id }));
+  assert.deepEqual(mergeDestinations(restored, merges).map(place => place.memberIds), [['a', 'b', 'c', 'z']]);
+});
+
+
+test('renaming and clearing a partial merged place also update absent historical members', () => {
+  const merges = [{ anchorId: 'b', memberIds: ['a', 'b'] }];
+  const restored = readRideMap(makeDataset([
+    { id: 'a', xy: [[0, 0], [10, 0]] }, { id: 'b', xy: [[0, 0], [300, 0]] },
+  ]));
+  const partial = { id: 'b', memberIds: ['b'] };
+  const labels = renamePlace(partial, '新球馆🏸', { a: '旧球馆🏸', b: '旧球馆🏸' }, merges);
+  const renamed = restored.select({ labels, merges });
+  assert.equal(renamed.destinations.length, 1);
+  assert.equal(renamed.destinations[0].label, '新球馆🏸');
+  assert.equal(renamed.destinations[0].named, true);
+  assert.equal(renamed.badmintonDays, 1);
+  const cleared = restored.select({ labels: renamePlace(partial, '', labels, merges), merges });
+  assert.equal(cleared.destinations.length, 1);
+  assert.equal(cleared.destinations[0].named, false);
+  assert.equal(cleared.badmintonDays, 0);
 });
