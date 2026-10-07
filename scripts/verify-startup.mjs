@@ -171,7 +171,7 @@ try {
   for (const [name, scenario, instrumentation, wait] of [
     ['close-before-app', { kind: 'valid', appDelay: 600, holdBody: true }, null, () => !!document.querySelector('#map') && !document.querySelector('.route-canvas') && !!window.alongStartup],
     ['close-body', { kind: 'valid', holdBody: true }, null, () => !!document.querySelector('.route-canvas')],
-    ['close-frame', { kind: 'valid' }, () => {
+    ['close-frame', { kind: 'valid', appDelay: 100 }, () => {
       window.__frames = new Map(); let next = 1;
       window.requestAnimationFrame = callback => { const id = next++; window.__frames.set(id, callback); return id; };
       window.cancelAnimationFrame = id => window.__frames.delete(id);
@@ -182,7 +182,7 @@ try {
     ['close-status-headers', { kind: 'valid', holdStatus: true, holdStatusHeaders: true }, null, () => document.querySelector('#visible-stat')?.textContent.includes('12 次')]
   ]) {
     const test = await open(name, scenario, instrumentation);
-    await test.page.waitForFunction(wait);
+    await test.page.waitForFunction(wait, undefined, { polling: 20 });
     if (name === 'close-revision') {
       await test.page.evaluate(async () => Promise.all(window.__digests.map(release => release())));
       await test.page.waitForFunction(() => window.__digests.length === 3);
