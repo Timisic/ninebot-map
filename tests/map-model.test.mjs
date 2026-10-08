@@ -1,3 +1,5 @@
+import { PUBLIC_GEOGRAPHY, campusZone, isNatureParking, insidePolygon, natureParkingStatus } from '../web/place-geography.mjs';
+import { partitionDestinations } from '../web/model.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -223,4 +225,89 @@ test('published place annotations supply shared names and historical merges with
     assert.throws(() => readRideMap({ ...data, place_annotations: invalid }), /公开地点/);
   }
   assert.throws(() => readRideMap({ ...data, extra: 'private' }), /白名单/);
+});
+
+
+test('only a cluster spanning both public campus polygons splits; unrelated places retain their members', () => {
+  const point = (id, lon, lat) => ({ id, xy: [lon * 85180, lat * 111195], latlng: [lat, lon] });
+  const endpoints = [point('a', 116.37262, 40.001), point('b', 116.37285, 40.001), point('c', 116.373, 40.001),
+    point('d', 116.37138, 40.00425), point('e', 116.3714, 40.0039), point('f', 116.36, 40.0), point('g', 116.3608, 40.0)];
+  assert.equal(campusZone([116.37262, 40.001]), 'institute');
+  assert.equal(campusZone([116.37285, 40.001]), 'campus');
+  assert.equal(campusZone([116.36, 40]), null);
+  const before = clusterEndpoints(endpoints), after = partitionDestinations(endpoints);
+  assert.deepEqual(after.find(p => p.memberIds.includes('a')).memberIds, ['a']);
+  assert.deepEqual(after.find(p => p.memberIds.includes('b')).memberIds, ['b', 'c']);
+  for (const id of ['d', 'f']) assert.deepEqual(after.find(p => p.memberIds.includes(id)).memberIds, before.find(p => p.memberIds.includes(id)).memberIds);
+  assert.deepEqual(partitionDestinations(endpoints.toReversed()), after);
+  assert.deepEqual(after.flatMap(p => p.memberIds).sort(), endpoints.map(p => p.id).sort());
+});
+
+function naturePublicFixture() {
+  const points = [[116.38598, 40.00876], [116.4018793, 40.0263745], [116.3999602, 40.0307085],
+    [116.38598, 40.00876], [116.4018793, 40.0263745], [116.38598, 40.00876], [116.38598, 40.00876], [116.38, 40.006]];
+  const local = makeDataset(points.map((_, i) => ({ id: String(i), xy: [[0, 0], [10, 0]] })));
+  const durations = [3600, 7200, 0, 120, null, 299, 300, 86400];
+  return { format: 'public-ride-map', schema_version: 1, dataset_id: 'ninebot-public-map', updated_at: local.generated_at, timezone: 'Asia/Shanghai', coordinate_system: 'unverified', summary: local.summary,
+    tracks: points.map((p, i) => ({ id: 'r_' + String(i).repeat(24), date: i === 1 ? '2026-01-02' : '2026-01-01', distance_m: 1000, stop_duration_s: durations[i], points: [[116.38, 40.006], p] })) };
+}
+
+test('south, northeast and north parking union excludes passing routes, short stops, road lanes and residential areas', () => {
+  assert.equal(isNatureParking([116.38598, 40.00876]), true);
+  assert.equal(isNatureParking([116.4018793, 40.0263745]), true);
+  assert.equal(isNatureParking([116.3999602, 40.0307085]), true);
+  assert.equal(isNatureParking([116.38, 40.006]), false);
+  const d = naturePublicFixture();
+  d.tracks.at(-1).points[0] = [116.38598, 40.00876]; // Passing through the park does not make the final parking a visit.
+  const m = readRideMap(d), initial = m.select();
+  assert.deepEqual(initial.nature, { durationS: 11100, knownStopCount: 3, unknownStopCount: 1, shortStopCount: 3, uncertainStopCount: 0, uncertainDurationS: 0 });
+  assert.equal(m.select({ from: '2026-01-02' }).nature.durationS, 7200);
+  const groups = initial.destinations.filter(p => p.activityKind === 'nature');
+  const merged = m.select({ labels: Object.fromEntries(d.tracks.map(t => [t.id, '奥森南门'])), merges: [{ anchorId: groups[0].id, memberIds: groups.flatMap(p => p.memberIds) }] });
+  assert.deepEqual(merged.nature, initial.nature);
+  assert.equal(initial.destinations.reduce((sum, p) => sum + (p.nature?.durationS ?? 0), 0), initial.nature.durationS);
+  assert.deepEqual(readRideMap({ ...d, tracks: d.tracks.toReversed() }).select().nature, initial.nature);
+  const nearbyRoad = PUBLIC_GEOGRAPHY.roads.flatMap(r => r.line).find(p => !insidePolygon(p, PUBLIC_GEOGRAPHY.park) && PUBLIC_GEOGRAPHY.entrances.some(g => Math.hypot((p[0] - g.point[0]) * 85180, (p[1] - g.point[1]) * 111195) < 100));
+  assert.ok(nearbyRoad); assert.equal(isNatureParking(nearbyRoad), false);
+  const residentialPoint = PUBLIC_GEOGRAPHY.residential.flatMap(r => r.polygon).find(p => !insidePolygon(p, PUBLIC_GEOGRAPHY.park));
+  assert.ok(residentialPoint); assert.equal(isNatureParking(residentialPoint), false);
+});
+
+test('local park stays cross midnight once, retain open records as unknown, and do not change raw tracks', () => {
+  const south = [116.38598, 40.00876], northeast = [116.4018793, 40.0263745];
+  const d = makeDataset(['a', 'b', 'c'].map(id => ({ id, xy: [[0, 0], [10, 0]] })));
+  const times = [['2026-01-01T22:00:00+08:00','2026-01-01T22:10:00+08:00'],['2026-01-01T23:10:00+08:00','2026-01-01T23:30:00+08:00'],['2026-01-02T01:30:00+08:00','2026-01-02T01:40:00+08:00']];
+  const coords = [[south,south],[south,northeast],[northeast,northeast]];
+  d.timezone = 'Asia/Shanghai';
+  for (let i = 0; i < 3; i++) { [d.rides[i].started_at, d.rides[i].ended_at] = times[i]; for (let j = 0; j < 2; j++) [d.tracks[i].points[j].longitude, d.tracks[i].points[j].latitude] = coords[i][j]; }
+  const raw = JSON.stringify(d), m = readRideMap(d);
+  assert.deepEqual(m.select().nature, { durationS: 10800, knownStopCount: 2, unknownStopCount: 1, shortStopCount: 0, uncertainStopCount: 0, uncertainDurationS: 0 });
+  assert.equal(m.select({ to: '2026-01-01' }).nature.durationS, 10800);
+  assert.deepEqual(m.select({ from: '2026-01-02' }).nature, { durationS: 0, knownStopCount: 0, unknownStopCount: 1, shortStopCount: 0, uncertainStopCount: 0, uncertainDurationS: 0 });
+  assert.equal(JSON.stringify(d), raw);
+  d.months[0].list_complete = false;
+  assert.equal(readRideMap(d).select().nature.durationS, 0);
+  assert.equal(readRideMap(d).select().nature.unknownStopCount, 3);
+});
+
+
+test('an unnamed outside gate leaves overnight parking uncertain; a few metres across a park boundary stay included', () => {
+  assert.equal(natureParkingStatus([116.3750085, 40.0082325]), 'unconfirmed');
+  assert.equal(isNatureParking([116.3750085, 40.0082325]), false);
+  const d = naturePublicFixture();
+  d.tracks[0].points[1] = [116.3750085, 40.0082325];
+  d.tracks[0].stop_duration_s = 16765;
+  const v = readRideMap(d).select();
+  assert.equal(v.nature.uncertainStopCount, 1);
+  assert.equal(v.nature.uncertainDurationS, 16765);
+  const outside = v.destinations.find(p => p.memberIds.includes(d.tracks[0].id));
+  assert.equal(outside.activityKind, null);
+  assert.equal(outside.nature, null);
+  assert.equal(v.nature.durationS, 7500);
+  const edgeIndex = PUBLIC_GEOGRAPHY.park.findIndex((a, i, p) => i > 0 && a[1] < 40.01 && p[i - 1][1] < 40.01 && Math.min(a[0], p[i - 1][0]) <= 116.386 && Math.max(a[0], p[i - 1][0]) >= 116.386);
+  const a = PUBLIC_GEOGRAPHY.park[edgeIndex - 1], b = PUBLIC_GEOGRAPHY.park[edgeIndex];
+  const border = a && b ? [116.386, a[1] + (b[1] - a[1]) * (116.386 - a[0]) / (b[0] - a[0])] : null;
+  assert.ok(border);
+  assert.equal(isNatureParking([border[0], border[1] - 3 / 111195]), true);
+  assert.equal(campusZone([116.373, 40.00061]), 'campus');
 });

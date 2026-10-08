@@ -67,3 +67,10 @@ cd ninebot-map
 [项目文档](docs/README.md) · [地图说明](docs/map-viewer.md) · [MIT License](LICENSE)
 
 导出静态网站使用 `./run export-site --dataset /path/to/dataset.json --output /path/to/new-site`。公开数据仅含地图展示字段，部署与自动更新见[静态部署说明](docs/static-deployment.md)。
+
+## 未来计划
+
+- 地方时间线：将奥森多入口视作同一地方，积累更多到访后按月查看频次、入口变化和停车停留推算时长；少量样本不解读为趋势。
+- 活动节奏：用已有轨迹时间戳观察清晨、白天、夜晚及月份间的变化，不猜出行目的。
+
+遵循宁静技术，自动使用已有记录，不要求手动打卡；数据不足时留白。以上为待办计划，尚未实现。

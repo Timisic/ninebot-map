@@ -5,6 +5,7 @@
 <title>Along</title>
 <script src="./startup.js"></script>
 <link rel="modulepreload" href="./model.mjs">
+<link rel="modulepreload" href="./place-geography.mjs">
 <link rel="modulepreload" href="./vendor/gcoord/gcoord.mjs">
 <link rel="modulepreload" href="./map-layer.mjs">
 <link rel="modulepreload" href="./icons.mjs">
@@ -25,7 +26,7 @@
 <main id="workspace">
   <div id="map" aria-label="骑行轨迹地图" tabindex="0"></div>
   <section class="toolbar" aria-label="数据更新">
-    <button id="update-map" type="button" disabled title="正在检查更新服务">更新</button><time id="updated-at"></time><span id="badminton-stat" title="所有含 🏸 的命名地点按骑行日去重，同日多处或返回只计一次"></span><span id="update-status" role="status" aria-live="polite">正在加载路线…</span>
+    <button id="update-map" type="button" disabled title="正在检查更新服务">更新</button><time id="updated-at"></time><span id="nature-total" aria-label="出门放风感受自然，正在读取停车停留数据"></span><span id="badminton-stat" title="所有含 🏸 的命名地点按骑行日去重，同日多处或返回只计一次"></span><span id="update-status" role="status" aria-live="polite">正在加载路线…</span>
   </section>
   <aside id="places-panel" aria-label="常去地点">
     <div class="panel-heading"><div><h2>常去地点</h2><span id="place-total">0 处</span></div><button id="close-places" type="button">关闭</button></div>
@@ -36,7 +37,7 @@
       <form id="label-form" hidden><label for="place-label">地点名称</label><div class="label-row"><input id="place-label" maxlength="40" autocomplete="off"><button type="submit">保存</button><button id="cancel-edit" type="button">取消</button></div><p id="label-note" role="status"></p></form>
       <form id="merge-form" hidden><label for="merge-target">将所选地点合并到</label><div class="label-row"><select id="merge-target" required></select><button type="submit">合并</button><button id="cancel-merge" type="button">取消</button></div></form>
     </section>
-    <details class="place-method"><summary>统计口径</summary><p>每条轨迹的终点计一次，在约 100 米范围内聚合。它表示行程结束。含 🏸 的命名地点合计按骑行日去重。自然时长依据相邻骑行估算车辆停放，不代表人的实际停留。<span id="place-storage-note">名称与地点合并只保存在此浏览器的当前地址。</span></p></details>
+    <details class="place-method"><summary>统计口径</summary><p>每条轨迹的终点计一次，在约 100 米范围内聚合；同一聚类跨两个公开院区时作候选分组，外边界采用 15 米容差；当前源坐标未核验，不能确认人的入院次数。它表示行程结束。含 🏸 的命名地点合计按骑行日去重。自然汇总识别奥森各侧入口停车区域，累计至少 5 分钟的已闭合车辆停放，未确认入口旁的园外停车保留为独立地点、不计入自然累计；未知与短停不计时，不代表人的实际停留。地点卡片保留原停车间隔统计。<span id="place-storage-note">名称与地点合并只保存在此浏览器的当前地址。</span></p></details>
   </aside>
   <section id="empty" class="empty-state" hidden><h2 id="empty-title">地图数据尚未发布</h2><p id="empty-description">数据就绪后会自动显示，请稍后刷新。</p></section>
   <div class="map-settings">

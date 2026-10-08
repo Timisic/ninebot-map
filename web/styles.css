@@ -53,7 +53,7 @@ h2 { font-size: 16px; font-weight: 600; }
 #update-map { grid-column: 1; grid-row: 1; display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; padding: 8px 4px; border: 0; background: transparent; color: var(--secondary); font-size: 12px; }
 #update-map:hover:not(:disabled) { color: var(--ink); background: var(--hover); }
 #updated-at { grid-column: 2; grid-row: 1; color: var(--secondary); font-size: 11px; white-space: nowrap; }
-#update-status { grid-column: 2; grid-row: 2; color: var(--ink); font-size: 11px; }
+#update-status { grid-column: 2; grid-row: 3; color: var(--ink); font-size: 11px; }
 .metrics { display: flex; flex-direction: column; gap: 3px; color: var(--secondary); font-size: 11px; }
 .metrics strong { margin-left: 8px; font-weight: 500; }
 #visible-stat { color: var(--ink); }
@@ -179,7 +179,7 @@ h2 { font-size: 16px; font-weight: 600; }
 
 
 
-#badminton-stat { grid-column: 1; grid-row: 2; display: flex; align-items: center; gap: 5px; color: var(--secondary); font-size: 12px; padding: 0 4px; white-space: nowrap; }
+#badminton-stat { grid-column: 1; grid-row: 3; display: flex; align-items: center; gap: 5px; color: var(--secondary); font-size: 12px; padding: 0 4px; white-space: nowrap; }
 svg.badminton-icon { width: 18px; height: 18px; flex-shrink: 0; fill: currentColor; stroke: none; }
 .destination-marker button svg.badminton-icon { fill: currentColor; stroke: none; width: 19px; height: 19px; }
 .nature-stat { display: flex; align-items: center; gap: 3px; flex-wrap: wrap; white-space: normal; font-size: 11px; }
@@ -205,3 +205,9 @@ svg.badminton-icon { width: 18px; height: 18px; flex-shrink: 0; fill: currentCol
  .selection-heading strong { display: none; }
  #selection-count { min-height: 20px; padding-right: 65px; white-space: nowrap; font-size: 10px; }
 }
+
+#nature-total { grid-column: 1 / -1; grid-row: 2; display: flex; align-items: center; gap: 5px; color: var(--secondary); font-size: 12px; padding: 0 4px 6px; min-width: 0; }
+#nature-total svg { width: 15px; height: 15px; flex-shrink: 0; }
+#nature-total span { overflow-wrap: anywhere; }
+
+.nature-estimate-note { display: block; color: var(--secondary); font-size: 10px; line-height: 1.4; }

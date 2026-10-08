@@ -120,7 +120,7 @@ try {
   await delayed.page.waitForFunction(() => document.querySelector('#visible-stat').textContent.includes('12 次'));
   const assets = requests.filter(request => request.scenario === 'delayed' && /\.mjs$/.test(request.path));
   assert.equal(new Set(assets.map(request => request.path)).size, assets.length, 'Preloaded imports reuse each module URL.');
-  assert.equal(assets.length, 6);
+  assert.equal(assets.length, 7);
   assert.ok(assets.every(request => /\/map\/assets\/[a-f0-9]{64}\//.test(request.path)));
   const dataRequest = requests.find(request => request.scenario === 'delayed' && request.path.endsWith('/dataset.json'));
   const appRequest = assets.find(request => request.path.endsWith('/app.mjs'));

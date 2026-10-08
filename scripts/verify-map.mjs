@@ -61,6 +61,20 @@ try {
     return { loaded: [...document.fonts].some(face => face.family.includes('Smiley Sans') && face.status === 'loaded'), family: getComputedStyle(document.documentElement).fontFamily, synthesis: getComputedStyle(document.documentElement).fontSynthesis, samples: ['#running', '.metrics', '.leaflet-container', '#place-label'].map(selector => getComputedStyle(document.querySelector(selector)).fontFamily) };
   });
   assert.equal(font.loaded, true, JSON.stringify(font));
+  assert.match(await page.locator('#nature-total').getAttribute('aria-label'), /停车停留推算/);
+  const toolbarGeometry = [];
+  for (const width of [1440, 390, 320, 640, 844]) {
+    await page.setViewportSize({ width, height: width === 640 ? 360 : 960 });
+    const result = await page.evaluate(() => {
+      const ids = ['update-map', 'nature-total', 'badminton-stat'];
+      const boxes = ids.map(id => { const b = document.getElementById(id).getBoundingClientRect(); return { id, left: b.left, right: b.right, top: b.top, bottom: b.bottom }; });
+      return { boxes, fits: boxes.every(b => b.left >= 0 && b.right <= innerWidth && b.bottom <= innerHeight), ordered: boxes[0].bottom <= boxes[1].top && boxes[1].bottom <= boxes[2].top, noOverflow: document.documentElement.scrollWidth <= innerWidth };
+    });
+    assert.ok(result.fits && result.ordered && result.noOverflow, JSON.stringify({ width, ...result }));
+    toolbarGeometry.push({ width, ...result });
+  }
+  await page.setViewportSize({ width: 1440, height: 960 });
+  if (process.env.VERIFICATION_OUTPUT) await fs.writeFile(path.join(process.env.VERIFICATION_OUTPUT, 'nature-toolbar.json'), JSON.stringify(toolbarGeometry, null, 2));
   assert.equal(font.synthesis, 'none');
   assert.ok(font.samples.every(family => family.startsWith('"Smiley Sans"')));
   assert.ok(fonts.some(response => response.status === 200 && response.type === 'font/woff2' && /\/assets\/[a-f0-9]{64}\/fonts\/smiley-sans\//.test(response.url)), JSON.stringify(fonts));

@@ -1,3 +1,4 @@
+import { NATURE_TITLE } from './place-geography.mjs';
 import { readRideMap, mergePlaceGroups, renamePlace } from './model.mjs';
 import { createRouteLayer, createBasemap } from './map-layer.mjs';
 import { icon } from './icons.mjs';
@@ -88,11 +89,15 @@ function placeCount(place) { return place.activityKind === 'badminton' ? `${plac
 function placeIcon(place) { return place.activityKind === 'badminton' ? 'badminton' : 'map-pin'; }
 function natureStat(place) {
   const stat = Object.assign(document.createElement('span'), { className: 'nature-stat' });
-  const minutes = place.stopDurationS === null ? null : Math.floor(place.stopDurationS / 60);
-  const value = minutes === null ? '暂无停留数据' : `${Math.floor(minutes / 60)} h ${minutes % 60} min${place.unknownStopCount ? ' · 部分估算' : ''}`;
-  stat.append('出门放风感受自然 ', icon('sun'), ` ${value}`);
-  stat.title = `由到达与下一次附近出发的时刻估算车辆停放时长，不代表人的实际停留。已知 ${place.knownStopCount} 次，未知 ${place.unknownStopCount} 次。`;
-  stat.setAttribute('aria-label', `出门放风感受自然 ${value}。${stat.title}`);
+  const seconds = place.nature ? place.nature.knownStopCount ? place.nature.durationS : place.nature.unknownStopCount || place.nature.uncertainStopCount ? null : 0 : place.stopDurationS;
+  const knownStopCount = place.nature?.knownStopCount ?? place.knownStopCount;
+  const uncertainStopCount = place.nature?.uncertainStopCount ?? 0;
+  const unknownStopCount = place.nature?.unknownStopCount ?? place.unknownStopCount;
+  const minutes = seconds === null ? null : Math.floor(seconds / 60);
+  const value = minutes === null ? uncertainStopCount ? '停车位置待确认' : '暂无停留数据' : `${Math.floor(minutes / 60)} h ${minutes % 60} min${unknownStopCount ? ' · 部分估算' : ''}`;
+  stat.append(NATURE_TITLE + ' ', icon('sun'), ` ${value}`);
+  stat.title = `由到达与下一次附近出发的时刻估算车辆停放时长，不代表人的实际停留。已知 ${knownStopCount} 次，未知 ${unknownStopCount} 次。${place.nature ? `只计奥森停车范围内至少 5 分钟的闭合停留。另 ${uncertainStopCount} 段位置待确认，不计入累计。` : ''}`;
+  stat.setAttribute('aria-label', `${NATURE_TITLE} ${value}。${stat.title}`);
   return stat;
 }
 function clearPlaceCue() {
@@ -137,6 +142,13 @@ function render() {
   routeLayer.setView(model, view, $('show-grid').checked, selectedPlace ? new Set(selectedPlace.visibleMemberIds) : null, theme === 'light');
   $('history-stat').replaceChildren('全部历史 ', Object.assign(document.createElement('strong'), { textContent: `${model.totals.ride_count} 次 · ${km(model.totals.total_distance_m)}` }));
   $('visible-stat').replaceChildren('当前地图 ', Object.assign(document.createElement('strong'), { textContent: `${view.rideCount} 次 · ${km(view.distance)}` }));
+  const natureMinutes = Math.floor(view.nature.durationS / 60);
+  const natureValue = view.nature.knownStopCount ? `${Math.floor(natureMinutes / 60)} h ${natureMinutes % 60} min` : view.nature.unknownStopCount ? '暂无停留数据' : '0 h 0 min';
+  const natureNote = `停车停留推算：奥森园内、边界 15 米容差、具公开通行证据的入口 100 米内及相邻停车区，排除园外住宅与道路中心附近；仅计至少 5 分钟的闭合停留，不代表人的实际停留。已知 ${view.nature.knownStopCount} 段，未知 ${view.nature.unknownStopCount} 段，短停 ${view.nature.shortStopCount} 段。园外且缺少入园证据的停车保留为独立地点，不计入累计。`;
+  $('nature-total').replaceChildren(icon('sun'), Object.assign(document.createElement('span'), { textContent: `${NATURE_TITLE} ${natureValue}${view.nature.unknownStopCount ? ' · 部分已知' : ''}` }));
+  $('nature-total').lastElementChild.append(Object.assign(document.createElement('small'), { className: 'nature-estimate-note', textContent: `停车停留推算${model.declaredCrs === 'unverified' ? ' · 坐标未核验' : ''}` }));
+  $('nature-total').title = natureNote;
+  $('nature-total').setAttribute('aria-label', `${NATURE_TITLE} ${natureValue}。${natureNote}`);
   $('badminton-stat').replaceChildren(icon('badminton'), ` ${view.badmintonDays} 次`);
   $('badminton-stat').setAttribute('aria-label', `羽毛球 ${view.badmintonDays} 次，所有含羽毛球符号的命名地点按骑行日去重，同日多处或返回只计一次`);
   $('place-total').textContent = `${view.destinations.length} 处${view.destinations.length > 100 ? ' · 展示前 100' : ''}`;

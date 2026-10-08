@@ -16,6 +16,7 @@ ASSETS = {
     '/fonts/smiley-sans/LICENSE': ('fonts/smiley-sans/LICENSE', 'text/plain; charset=utf-8'),
     '/app.mjs': ('app.mjs', 'text/javascript; charset=utf-8'),
     '/vendor/gcoord/gcoord.mjs': ('vendor/gcoord/gcoord.mjs', 'text/javascript; charset=utf-8'),
+    '/place-geography.mjs': ('place-geography.mjs', 'text/javascript; charset=utf-8'),
     '/model.mjs': ('model.mjs', 'text/javascript; charset=utf-8'),
     '/icons.mjs': ('icons.mjs', 'text/javascript; charset=utf-8'),
     '/map-layer.mjs': ('map-layer.mjs', 'text/javascript; charset=utf-8'),

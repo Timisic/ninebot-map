@@ -1,3 +1,4 @@
+import { campusZone, natureParkingStatus, NATURE_MIN_SECONDS } from './place-geography.mjs';
 import gcoord from './vendor/gcoord/gcoord.mjs';
 export const LIMITS = Object.freeze({ bytes: 40 * 1024 * 1024, points: 300000, rides: 25000, cells: 1500000, neighbours: 4000000 });
 export const GRID_METERS = 200;
@@ -219,6 +220,20 @@ export function clusterEndpoints(endpoints, radius = DESTINATION_METERS) {
   return Object.freeze(clusters.sort((a, b) => b.memberIds.length - a.memberIds.length || a.id.localeCompare(b.id, 'en')).map((c, index) => Object.freeze({ ...c, defaultLabel: `地点 ${index + 1}` })));
 }
 
+export function partitionDestinations(endpoints) {
+  const original = clusterEndpoints(endpoints), byId = new Map(endpoints.map(p => [p.id, p]));
+  const places = original.flatMap(place => {
+    const members = place.memberIds.map(id => byId.get(id));
+    const zones = new Map(members.map(p => [p.id, campusZone([p.latlng[1], p.latlng[0]])]));
+    if (!members.some(p => zones.get(p.id) === 'campus') || !members.some(p => zones.get(p.id) === 'institute')) return [place];
+    return ['campus', 'institute', null].flatMap(zone => {
+      const points = members.filter(p => zones.get(p.id) === zone);
+      return points.length ? clusterEndpoints(points) : [];
+    });
+  });
+  return Object.freeze(places.sort((a, b) => b.memberIds.length - a.memberIds.length || a.id.localeCompare(b.id, 'en')).map((p, i) => Object.freeze({ ...p, defaultLabel: `地点 ${i + 1}` })));
+}
+
 function customPlaceLabel(place, labels) {
   const names = new Set(place.memberIds.filter(id => Object.hasOwn(labels, id)).map(id => labels[id]).filter(value => typeof value === 'string' && value.length));
   return names.size === 1 ? [...names][0] : null;
@@ -367,8 +382,17 @@ export function readRideMap(input, interpretation) {
     const last = track.points.at(-1);
     endpoints.push({ id: track.ride_id, xy: project(last), latlng: [last.latitude, last.longitude] });
   }
-  const destinations = clusterEndpoints(endpoints);
+  const destinations = partitionDestinations(endpoints);
+  const natureStatus = new Map(endpoints.map(p => [p.id, natureParkingStatus([p.latlng[1], p.latlng[0]])]));
+  const natureIds = new Set(endpoints.filter(p => natureStatus.get(p.id) === 'included').map(p => p.id));
+  const natureCandidateIds = natureIds;
   const dates = tracks.map(t => t.date).sort();
+  const natureSummary = members => {
+    const candidates = members.filter(t => natureIds.has(t.id));
+    const uncertain = members.filter(t => natureStatus.get(t.id) === 'unconfirmed');
+    const known = candidates.filter(t => t.stopDurationS !== null && t.stopDurationS >= NATURE_MIN_SECONDS);
+    return Object.freeze({ durationS: sumKnown(known.map(t => t.stopDurationS)), knownStopCount: known.length, unknownStopCount: candidates.filter(t => t.stopDurationS === null).length, shortStopCount: candidates.filter(t => t.stopDurationS !== null && t.stopDurationS < NATURE_MIN_SECONDS).length, uncertainStopCount: uncertain.length, uncertainDurationS: sumKnown(uncertain.map(t => t.stopDurationS)) });
+  };
   const select = ({ from = '', to = '', labels = placeAnnotations?.labels ?? {}, merges = placeAnnotations?.merges ?? [] } = {}) => {
     assert(!from || /^\d{4}-\d{2}-\d{2}$/.test(from), '开始日期无效');
     assert(!to || /^\d{4}-\d{2}-\d{2}$/.test(to), '结束日期无效');
@@ -383,13 +407,14 @@ export function readRideMap(input, interpretation) {
       const memberIds = place.memberIds.filter(id => ids.has(id));
       const days = new Set(memberIds.map(id => ridesById.get(id).date));
       const label = customPlaceLabel(place, labels), named = label !== null;
-      const activityKind = label?.includes('🏸') ? 'badminton' : label?.replace(/\s/g, '').includes('奥森南门') ? 'nature' : null;
+      const activityKind = label?.includes('🏸') ? 'badminton' : memberIds.some(id => natureCandidateIds.has(id)) || label?.replace(/\s/g, '').includes('奥森南门') ? 'nature' : null;
       if (activityKind === 'badminton') for (const day of days) badmintonDays.add(day);
       const stops = memberIds.map(id => ridesById.get(id).stopDurationS);
       const knownStopCount = stops.filter(seconds => seconds !== null).length;
-      return { ...place, label: label ?? place.defaultLabel, named, activityKind, visibleMemberIds: memberIds, count: memberIds.length, days: days.size, stopDurationS: knownStopCount ? sumKnown(stops) : null, knownStopCount, unknownStopCount: memberIds.length - knownStopCount };
+      return { ...place, nature: memberIds.some(id => natureCandidateIds.has(id)) ? natureSummary(memberIds.map(id => ridesById.get(id))) : null, label: label ?? place.defaultLabel, named, activityKind, visibleMemberIds: memberIds, count: memberIds.length, days: days.size, stopDurationS: knownStopCount ? sumKnown(stops) : null, knownStopCount, unknownStopCount: memberIds.length - knownStopCount };
     }).filter(p => p.count).sort((a, b) => b.count - a.count || a.id.localeCompare(b.id, 'en'));
-    return { tracks: visible, passages, destinations: places, badmintonDays: badmintonDays.size, rideCount: visible.length, distance: sum(visible.map(t => t.distance)) };
+    const nature = natureSummary(visible);
+    return { tracks: visible, passages, destinations: places, nature, badmintonDays: badmintonDays.size, rideCount: visible.length, distance: sum(visible.map(t => t.distance)) };
   };
   return Object.freeze({ placeAnnotations, datasetId: data.dataset_id, updatedAt: data.updated_at || data.generated_at, declaredCrs: data.coordinate_system, interpretation: crs, timezone: data.timezone, totals, diagnostics: Object.freeze({ gaps, excluded: totals.ride_count - tracks.length }), dateBounds: Object.freeze([dates[0] || '', dates.at(-1) || '']), destinations, select, cellAt(latitude, longitude) { const xy = project({ latitude, longitude }); return `${Math.floor(xy[0] / GRID_METERS)},${Math.floor(xy[1] / GRID_METERS)}`; }, cellBounds(key) { const [x, y] = key.split(',').map(Number); return [unproject(x * GRID_METERS, y * GRID_METERS), unproject((x + 1) * GRID_METERS, (y + 1) * GRID_METERS)]; } });
 }
