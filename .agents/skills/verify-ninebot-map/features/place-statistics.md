@@ -12,7 +12,7 @@ Open the local map and read the top-left natural parking total, then open 常去
 
 ## Driving it with Playwright
 
-The browser map suite checks `#nature-total` between `#update-map` and `#badminton-stat`, its accessible parking-estimate explanation, and toolbar containment at desktop/mobile widths. Existing basemap and label tests remain required. Use synthetic fixtures for retained regression screenshots. For a separately authorized real-data review, keep processing local and cover the entire map/precise location surface before retaining any screenshot; do not upload raw trajectories or enable external tile requests.
+The browser map suite checks `#nature-total` between `#update-map` and `#badminton-stat`, its activity name and duration in visible copy, title and accessible label, and toolbar containment in both themes at desktop/mobile widths. Require no persistent implementation or verification copy, substitute badges or leftover explanation-row spacing in the main view, following [the main-view copy rule](../../../../AGENTS.md#main-view-copy). Existing basemap and label tests remain required. Use synthetic fixtures for retained regression screenshots. For a separately authorized real-data review, keep processing local and cover the entire map/precise location surface before retaining any screenshot; do not upload raw trajectories or enable external tile requests.
 
 ## Gotchas
 

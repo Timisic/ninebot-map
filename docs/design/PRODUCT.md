@@ -26,7 +26,7 @@ product
 - 先呈现路线，再让用户选择细看区域和地点。
 - 每项次数有可解释的统计口径。
 - 本人数据在本地处理，界面不接触账号或原始会话。
-- 缺失轨迹、未知坐标系和近似统计保持可见。
+- 主视图文案遵循 [AGENTS.md 的 Main-view copy](../../AGENTS.md#main-view-copy)。保留帮助用户采取行动的错误反馈与权限提示，统计口径可折叠查看。
 
 ## Accessibility & Inclusion
 

@@ -144,11 +144,9 @@ function render() {
   $('visible-stat').replaceChildren('当前地图 ', Object.assign(document.createElement('strong'), { textContent: `${view.rideCount} 次 · ${km(view.distance)}` }));
   const natureMinutes = Math.floor(view.nature.durationS / 60);
   const natureValue = view.nature.knownStopCount ? `${Math.floor(natureMinutes / 60)} h ${natureMinutes % 60} min` : view.nature.unknownStopCount ? '暂无停留数据' : '0 h 0 min';
-  const natureNote = `停车停留推算：奥森园内、边界 15 米容差、具公开通行证据的入口 100 米内及相邻停车区，排除园外住宅与道路中心附近；仅计至少 5 分钟的闭合停留，不代表人的实际停留。已知 ${view.nature.knownStopCount} 段，未知 ${view.nature.unknownStopCount} 段，短停 ${view.nature.shortStopCount} 段。园外且缺少入园证据的停车保留为独立地点，不计入累计。`;
-  $('nature-total').replaceChildren(icon('sun'), Object.assign(document.createElement('span'), { textContent: `${NATURE_TITLE} ${natureValue}${view.nature.unknownStopCount ? ' · 部分已知' : ''}` }));
-  $('nature-total').lastElementChild.append(Object.assign(document.createElement('small'), { className: 'nature-estimate-note', textContent: `停车停留推算${model.declaredCrs === 'unverified' ? ' · 坐标未核验' : ''}` }));
-  $('nature-total').title = natureNote;
-  $('nature-total').setAttribute('aria-label', `${NATURE_TITLE} ${natureValue}。${natureNote}`);
+  $('nature-total').replaceChildren(icon('sun'), Object.assign(document.createElement('span'), { textContent: `${NATURE_TITLE} ${natureValue}` }));
+  $('nature-total').title = `${NATURE_TITLE} ${natureValue}`;
+  $('nature-total').setAttribute('aria-label', `${NATURE_TITLE} ${natureValue}`);
   $('badminton-stat').replaceChildren(icon('badminton'), ` ${view.badmintonDays} 次`);
   $('badminton-stat').setAttribute('aria-label', `羽毛球 ${view.badmintonDays} 次，所有含羽毛球符号的命名地点按骑行日去重，同日多处或返回只计一次`);
   $('place-total').textContent = `${view.destinations.length} 处${view.destinations.length > 100 ? ' · 展示前 100' : ''}`;

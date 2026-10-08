@@ -206,8 +206,6 @@ svg.badminton-icon { width: 18px; height: 18px; flex-shrink: 0; fill: currentCol
  #selection-count { min-height: 20px; padding-right: 65px; white-space: nowrap; font-size: 10px; }
 }
 
-#nature-total { grid-column: 1 / -1; grid-row: 2; display: flex; align-items: center; gap: 5px; color: var(--secondary); font-size: 12px; padding: 0 4px 6px; min-width: 0; }
+#nature-total { grid-column: 1 / -1; grid-row: 2; display: flex; align-items: center; gap: 5px; color: var(--secondary); font-size: 12px; padding: 0 4px; min-width: 0; }
 #nature-total svg { width: 15px; height: 15px; flex-shrink: 0; }
 #nature-total span { overflow-wrap: anywhere; }
-
-.nature-estimate-note { display: block; color: var(--secondary); font-size: 10px; line-height: 1.4; }
