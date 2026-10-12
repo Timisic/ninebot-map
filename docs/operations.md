@@ -8,6 +8,8 @@
 | 独立私有 GitHub 仓库 | Actions 定期采集，持久保存加密档案 | `state` 分支的 `state.enc` |
 | 用户指定的公开仓库 | 展示持续更新的无底图轨迹图片 | PNG 和 README 图片块 |
 
+骑行采集只由私有同步仓库的 GitHub Actions 执行：工作流 `Private ride sync`（`.github/workflows/sync.yml`，由 `templates/cloud-sync.yml` 复制），`cron: '17 2 * * *'`，采集 job 运行在 `macos-latest`。公开仓库 `Timisic/ninebot-map` 只放代码、文档和轨迹 PNG，不保存骑行档案。本机只登录、首次采集、下载档案和查看地图，不再定时采集。
+
 `./run cloud install` 配置私有同步仓库。默认连续间隔为 10 天，每天北京时间 10:17 左右检查到期时间，GitHub Actions 可能延迟。采集成功更新成功时钟；图片发布重试保留该时钟。`./run cloud status` 查看工作流、采集与图片发布状态。
 
 `./run cloud map` 下载、合并档案并打开本地地图。`./run cloud pull` 只下载并更新标准数据。已经打开的地图跟随有效数据更新，保留筛选与地点名称。本机下载由显式命令触发，云端调度无需本机运行。
@@ -31,8 +33,8 @@
 
 地图服务默认使用 `http://127.0.0.1:8765/`。终端保持运行时才能访问，Ctrl-C 关闭服务。端口被占用时，先查看该地址是否已是自己的地图，或用 `./run map --port 8766` 启动另一个实例。`--port 0` 自动分配空闲端口。地点名称和主题保存在浏览器中，地址和端口改变后会使用另一份存储；返回原浏览器和端口可继续使用原名称。
 
-仅使用手动采集或云端同步时，不需要安装本机定时任务，数据可直接放在项目的 `.private/` 和 `data/`。
+会话和档案直接放在项目的 `.private/` 和 `data/`。
 
-macOS 对下载、文稿和桌面目录的后台访问有限制。安装本机定时同步的 `schedule install` 会将这些目录内的私密存储移到 `~/Library/Application Support/Ninebot Map/<标识>/`。原项目中的 `.private` 指向其中的 `sessions`，`data` 指向其中的 `data`。这两个符号链接让原命令继续工作。后台代码和 Python 环境另存于 `runtime`。此迁移只为本机 launchd 运行，不是把数据上传到云端。
+CLI 仍保留 `./run schedule`，它是本机 launchd 定时任务，不是本项目的采集器，不要安装。只有运行过 `schedule install` 时，私密目录才会被移到 `~/Library/Application Support/Ninebot Map/<标识>/` 并在项目里留下符号链接。
 
 导出输出中的 `reports/<生成标识>/` 是一次合并报告，`prepared/<生成标识>/dataset.json` 是一次标准数据快照。平时打开地图不需要复制这些长路径。`data/<车辆标识>/prepared/dataset.json` 是稳定入口，`./run map` 自动选择它。标准数据更新后，正在运行的地图会读取新版本。已有生成目录路径也会通过同级最新版本指针跟随更新。
