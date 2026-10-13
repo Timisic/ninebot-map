@@ -13,17 +13,17 @@ A user keeps the map open while local data changes, or requests a public update 
 - `shared-cooldown` displays the same activity hint for a server 429 and repeated clicks.
 - `update-failure` retains the map when dispatch is rejected or the service is unavailable.
 - `local-unavailable` disables the public update button on a local 404 without a page error.
-- `shared-name-poll` lets a second open page read a name saved on the first page. The next focus poll of `dataset.json` applies it. The scratch dataset file is not replaced for that check.
+- `shared-name-poll` lets a second open page read a name saved on the first page. A visible page checks `dataset.json` on focus, when the tab becomes visible, and every 60 seconds. The harness fires focus. The scratch dataset file is not replaced for that check.
 
 ## How to get to it (user POV)
 
-Open `./run map --dataset <file>`, replace that local file with standard data, and return the page to the foreground. A configured public site exposes its update button at the upper left.
+Open `./run map --dataset <file>`, replace that local file with standard data, and return the page to the foreground. A visible page also checks `dataset.json` every 60 seconds. A configured public site exposes its update button at the upper left.
 
 ## Driving it with Playwright
 
 Run `npm run verify:doctor`, then `npm run verify -- --suite refresh`. The harness owns a scratch dataset, local server and fresh browser context. It confirms GET summary and HEAD ETag, starts with one ride, and saves a synthetic place name. A second page opened before that save shows the saved name after focus, and the scratch `dataset.json` bytes stay the same. The harness then checks grid and view retention after replacing the dataset with two rides. An invalid replacement must preserve both rides.
 
-The public-update checks mock the same-origin API contract while using the real local dataset server. An accepted request progresses through queued, running and succeeded. The page must wait for data collected after that request before reporting success. It then reads three rides while retaining selection, an unsaved label draft, grid, theme and view. The compact timestamp omits the year visually and retains a full datetime and title. Success uses a visually hidden aria-live message. A server 429 and subsequent clicks display “正在Riding中...” in the same hint as Running. Dispatch rejection and unavailable responses preserve the visible map.
+The public-update checks mock the same-origin API contract while using the real local dataset server. An accepted request progresses through queued, running and succeeded. While that update is queued, running, unknown, or succeeded without newer data, a visible page checks `dataset.json` every 5 seconds. The page must wait for data collected after that request before reporting success. It then reads three rides while retaining selection, an unsaved label draft, grid, theme and view. The compact timestamp omits the year visually and retains a full datetime and title. Success uses a visually hidden aria-live message. A server 429 and subsequent clicks display “正在Riding中...” in the same hint as Running. Dispatch rejection and unavailable responses preserve the visible map.
 
 Read `refresh.json` and the before/after screenshots. Require owned process termination, a closed socket and removed scratch data while evidence remains.
 
