@@ -3,7 +3,7 @@ import { partitionDestinations } from '../web/model.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { readRideMap, stopDurations, mergeDestinations, mergePlaceGroups, renamePlace, segmentCells, clusterEndpoints, tilesAllowed, displayCoordinate } from '../web/model.mjs';
+import { readRideMap, stopDurations, mergeDestinations, mergePlaceGroups, renamePlace, savePlaceName, normalizePlaceName, segmentCells, clusterEndpoints, tilesAllowed, displayCoordinate } from '../web/model.mjs';
 import { makeDataset } from './map-fixture.mjs';
 const cells = result => [...result].sort();
 test('grid traversal counts crossed interiors, exact corners, negative cells and duplicate points', () => {
@@ -208,17 +208,28 @@ test('published place annotations supply shared names and historical merges with
   const ids = ['a', 'b', 'c', 'd'].map(letter => 'r_' + letter.repeat(24));
   const local = makeDataset(ids.slice(0, 3).map((id, index) => ({ id, xy: [[index * 500, 0], [index * 500 + 100, 0]], date: index === 2 ? '2026-01-02' : '2026-01-01' })));
   const data = { format: 'public-ride-map', schema_version: 1, dataset_id: 'ninebot-public-map', updated_at: local.generated_at, timezone: local.timezone, coordinate_system: local.coordinate_system, summary: local.summary, tracks: local.tracks.map((track, index) => ({ id: track.ride_id, date: index === 2 ? '2026-01-02' : '2026-01-01', distance_m: 1000, points: track.points.map(point => [point.longitude, point.latitude]) })) };
-  assert.equal(readRideMap(data).placeAnnotations, null);
+  const plain = readRideMap(data);
+  assert.equal(plain.publishedMerges, null);
+  assert.deepEqual(Object.keys(plain.sharedLabels), []);
   const annotations = { labels: { [ids[0]]: '合成球馆🏸', [ids[2]]: '另一球馆🏸', [ids[3]]: '🏸'.repeat(40) }, merges: [{ anchorId: ids[0], memberIds: [ids[0], ids[1], ids[3]] }] };
   local.place_annotations = annotations;
-  assert.equal(readRideMap(local).placeAnnotations, null);
-  assert.equal(readRideMap(local).select().badmintonDays, 0);
+  const raw = readRideMap(local);
+  assert.equal(raw.publishedMerges, null);
+  assert.equal(raw.sharedLabels[ids[0]], '合成球馆🏸');
+  assert.equal(raw.select().destinations.length, 3);
+  assert.equal(raw.select().badmintonDays, 2);
   const shared = readRideMap({ ...data, place_annotations: annotations });
+  assert.deepEqual(shared.publishedMerges, annotations.merges);
+  assert.equal(shared.sharedLabels[ids[0]], '合成球馆🏸');
   assert.equal(shared.select().destinations.length, 2);
   assert.equal(shared.select().destinations[0].label, '合成球馆🏸');
   assert.equal(shared.select().destinations[0].count, 2);
   assert.equal(shared.select().badmintonDays, 2);
-  assert.deepEqual(readRideMap({ ...data, place_annotations: {} }).placeAnnotations, { labels: {}, merges: [] });
+  const empty = readRideMap({ ...data, place_annotations: {} });
+  assert.deepEqual(Object.keys(empty.sharedLabels), []);
+  assert.deepEqual(empty.publishedMerges, []);
+  const omittedMerges = readRideMap({ ...data, place_annotations: { labels: { [ids[0]]: '合成球馆🏸' } } });
+  assert.deepEqual(omittedMerges.publishedMerges, []);
   assert.equal(readRideMap({ ...data, place_annotations: { labels: { [ids[0]]: '\u0085合成球馆' } } }).select().destinations[0].label, '\u0085合成球馆');
   const group = { anchorId: ids[0], memberIds: ids.slice(0, 2) };
   for (const invalid of [null, [], { extra: true }, { labels: [] }, { labels: { private: 'name' } }, { labels: { [ids[0]]: '' } }, { labels: { [ids[0]]: '\ufeff合成球馆' } }, { labels: { [ids[0] + '\n']: 'name' } }, { labels: { [ids[0]]: ' leading' } }, { labels: { [ids[0]]: '🏸'.repeat(41) } }, { merges: {} }, { merges: [{ anchorId: ids[0], memberIds: [ids[0]] }] }, { merges: [{ anchorId: ids[0], memberIds: [ids[0], ids[0]] }] }, { merges: [{ anchorId: ids[2], memberIds: ids.slice(0, 2) }] }, { merges: [{ anchorId: ids[0], memberIds: [ids[0], 'private'] }] }, { merges: [{ ...group, extra: true }] }, { merges: Array(12501).fill(group) }]) {
@@ -310,4 +321,45 @@ test('an unnamed outside gate leaves overnight parking uncertain; a few metres a
   assert.ok(border);
   assert.equal(isNatureParking([border[0], border[1] - 3 / 111195]), true);
   assert.equal(campusZone([116.373, 40.00061]), 'campus');
+});
+
+test('savePlaceName posts the merged ride ids and renders the server projection', async () => {
+  const place = { id: 'b', memberIds: ['b'] };
+  const merges = [{ anchorId: 'b', memberIds: ['a', 'b'] }, { anchorId: 'z', memberIds: ['z', 'a'] }];
+  const calls = [];
+  const fetchImpl = async (url, init) => {
+    calls.push({ url, init });
+    const sent = JSON.parse(init.body);
+    assert.deepEqual(sent, { rideIds: ['a', 'b', 'z'], name: '球馆🏸' });
+    return new Response(JSON.stringify({ labels: { a: '球馆🏸', b: '球馆🏸', z: '球馆🏸', 'place-103': '馆' } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  assert.equal(normalizePlaceName('  球馆🏸  '), '球馆🏸');
+  assert.equal(normalizePlaceName('   '), null);
+  assert.throws(() => normalizePlaceName('🏸'.repeat(41)), /名称无效/);
+  const labels = await savePlaceName(place, '  球馆🏸  ', { b: '私人名称' }, merges, fetchImpl);
+  assert.equal(calls[0].url, './api/place-names');
+  assert.equal(calls[0].init.method, 'POST');
+  assert.equal(calls[0].init.cache, 'no-store');
+  assert.equal(calls[0].init.headers['Content-Type'], 'application/json');
+  assert.equal(labels.b, '球馆🏸');
+  assert.equal(labels['place-103'], '馆');
+  assert.equal(Object.getPrototypeOf(labels), null);
+  let cleared;
+  await savePlaceName(place, ' \t', { b: '球馆🏸' }, [], async (_url, init) => {
+    cleared = JSON.parse(init.body);
+    return new Response(JSON.stringify({ labels: {} }), { status: 200 });
+  });
+  assert.deepEqual(cleared, { rideIds: ['b'], name: null });
+  const reject = (impl, message) => assert.rejects(() => savePlaceName(place, '馆', {}, [], impl), { message });
+  await reject(async () => new Response('no', { status: 400 }), '名称无效。');
+  await reject(async () => new Response('no', { status: 413 }), '名称太多。');
+  await reject(async () => { throw new TypeError('Failed to fetch'); }, '名称没有保存，请重试。');
+  await reject(async () => new Response('no', { status: 500 }), '名称没有保存，请重试。');
+  await reject(async () => new Response('not-json', { status: 200 }), '名称没有保存，请重试。');
+  await reject(async () => new Response(JSON.stringify({ labels: { b: '馆' }, changed: true }), { status: 200 }), '名称没有保存，请重试。');
+  await reject(async () => new Response(JSON.stringify({ labels: { 'bad id': '馆' } }), { status: 200 }), '名称没有保存，请重试。');
+  await reject(async () => new Response(JSON.stringify({ labels: { b: '' } }), { status: 200 }), '名称没有保存，请重试。');
+  let posts = 0;
+  await assert.rejects(() => savePlaceName(place, '🏸'.repeat(41), {}, [], async () => { posts += 1; return new Response('{}', { status: 200 }); }), /名称无效/);
+  assert.equal(posts, 0);
 });
