@@ -171,6 +171,7 @@ try {
   await page.locator('#toggle-places').click();
   await page.locator('.place-button').first().click();
   await page.locator('#edit-place').click(); await page.locator('#place-label').fill('合成终点 A'); await page.locator('#label-form button[type=submit]').click();
+  await page.waitForFunction(() => document.querySelector('.place-name')?.textContent === '合成终点 A');
   assert.equal(await page.locator('.place-name').first().textContent(), '合成终点 A');
   await page.reload(); await page.waitForFunction(() => document.querySelector('.place-name')?.textContent === '合成终点 A');
   await fs.writeFile(datasetPath, '{broken');
@@ -450,7 +451,8 @@ try {
     localStorage.setItem(key, JSON.stringify({ [id]: '原道路预览名称' }));
   });
   await legacyPage.reload();
-  await legacyPage.waitForFunction(() => document.querySelector('.place-name')?.textContent === '原道路预览名称');
+  await legacyPage.waitForFunction(() => document.querySelector('#visible-stat').textContent.includes('12 次'));
+  assert.notEqual(await legacyPage.locator('.place-name').first().textContent(), '原道路预览名称');
   assert.equal(await legacyPage.locator('#crs').count(), 0);
   assert.deepEqual(await legacyPage.locator('.place-count').allTextContents(), ['6次', '3次', '2次', '1次']);
   await legacyPage.locator('#toggle-places').click();
@@ -458,6 +460,7 @@ try {
   await legacyPage.locator('#edit-place').click();
   await legacyPage.locator('#place-label').fill('');
   await legacyPage.locator('#label-form button[type=submit]').click();
+  await legacyPage.waitForFunction(() => document.querySelector('.place-name')?.textContent === '地点 1');
   assert.equal(await legacyPage.locator('.place-name').first().textContent(), '地点 1');
   await legacyPage.reload();
   await legacyPage.waitForFunction(() => document.querySelector('#visible-stat').textContent.includes('12 次'));
@@ -476,9 +479,8 @@ try {
   await blockedPage.locator('#edit-place').click();
   await blockedPage.locator('#place-label').fill('仅本次名称');
   await blockedPage.locator('#label-form button[type=submit]').click();
-  assert.equal(await blockedPage.locator('#label-form').isVisible(), true);
-  assert.equal(await blockedPage.locator('#label-note').isVisible(), true);
-  assert.match(await blockedPage.locator('#label-note').textContent(), /无法保存.*仅本次/);
+  await blockedPage.waitForFunction(() => document.querySelector('.place-name')?.textContent === '仅本次名称');
+  assert.equal(await blockedPage.locator('#label-note').textContent(), '已保存，其他打开此地图的人会看到。');
   await blocked.close();
 
   await context.close();
@@ -497,9 +499,8 @@ try {
   await placesPage.waitForFunction(() => document.querySelector('#visible-stat').textContent.includes('104 次'));
   assert.equal(await placesPage.locator('.destination-marker').count(), 0);
   await placesPage.evaluate(async () => {
-    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('synthetic-map|unverified|destinations-fixed-anchor-100m-v1'));
-    const key = 'ride-map-labels:' + [...new Uint8Array(digest)].map(n => n.toString(16).padStart(2, '0')).join('');
-    localStorage.setItem(key, JSON.stringify({ 'place-103': '列表外的命名地点' }));
+    const response = await fetch('./api/place-names', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rideIds: ['place-103'], name: '列表外的命名地点' }), cache: 'no-store' });
+    if (!response.ok) throw new Error(String(response.status));
   });
   await placesPage.reload();
   await placesPage.waitForFunction(() => document.querySelector('.destination-marker button')?.dataset.placeId === 'place-103');
@@ -511,6 +512,7 @@ try {
     await placesPage.locator('#edit-place').click();
     await placesPage.locator('#place-label').fill(label);
     await placesPage.locator('#label-form button[type=submit]').click();
+    await placesPage.waitForFunction(() => document.querySelector('#label-note').textContent.startsWith('已保存'));
   };
   await namePlace('place-000', '合成球馆🏸');
   await namePlace('place-001', '合成球馆🏸');
@@ -520,6 +522,7 @@ try {
   await placesPage.locator('#merge-place').click();
   await placesPage.locator('#merge-target').selectOption('place-000');
   await placesPage.locator('#merge-form button[type=submit]').click();
+  await placesPage.waitForFunction(() => document.querySelector('#selection-count')?.textContent === '2 次行程终点 · 1 个骑行日');
   assert.equal(await placesPage.locator('#selection-count').textContent(), '2 次行程终点 · 1 个骑行日');
   assert.equal(await placesPage.locator('.place-count').first().textContent(), '1次');
   assert.equal(await placesPage.locator('#place-total').textContent(), '103 处 · 展示前 100');
