@@ -25,7 +25,7 @@ The map command includes startup. To run only startup, use `npm run verify -- --
 
 ### Static export
 
-Run `npm run verify -- --suite static` in its fresh isolated session. It exports a synthetic dataset under a nested path, validates versioned scripts, font and license bytes, and exercises no-ETag refresh and rejected uploads. In the same browser, open an older release with long-lived cached assets, switch the server to the new export, and navigate normally. Require the new asset hash and current theme styles, while old bundle resources remain available. Read `static.json` and retained screenshots. This does not establish a live server deployment.
+Run `npm run verify -- --suite static` in its fresh isolated session. It exports a synthetic dataset under a nested path, validates versioned scripts, font and license bytes, and exercises no-ETag refresh and rejected uploads. Shared place-name behavior in this suite is in [Labels and themes](labels-and-themes.md). In the same browser, open an older release with long-lived cached assets, switch the server to the new export, and navigate normally. Require the new asset hash and current theme styles, while old bundle resources remain available. Read `static.json` and retained screenshots. This does not establish a live server deployment.
 
 ## Gotchas
 

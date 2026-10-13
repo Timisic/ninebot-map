@@ -26,12 +26,12 @@ The refresh harness also performs a read-only HTTP doctor on its owned instance 
 - `npm run verify -- --suite map` runs both map and startup suites, covering endpoint loading, startup failures, activity navigation, labels, system theme and basemap behavior. The existing browser CI job uses this group.
 - `npm run verify -- --suite wheel` covers production wheel handling at two device pixel ratios.
 - `npm run verify -- --suite refresh` covers valid updates, preserved controls, invalid replacement and public-update UI responses.
-- `npm run verify -- --suite static` covers public export, relative resource paths, no-import UI, no-ETag refresh, shared published names and merges across devices, stale browser storage, and rejected uploads.
+- `npm run verify -- --suite static` covers public export, relative resource paths, no-import UI, no-ETag refresh, shared names served from `dataset.json`, a visible rename control with merge hidden, stale browser storage, a rejected `POST /api/place-names` on a static file host, and rejected uploads.
 - `npm run verify -- --suite startup` covers one early dataset fetch, truthful loading and failures, zero tracks, nested exports, module reuse, validated ETags, and closed-page cleanup.
-- `npm run verify -- --suite python` covers collector, local server, scheduler and cloud behavior with synthetic adapters.
-- `npm run verify -- --suite model` covers route, grid and destination calculations.
+- `npm run verify -- --suite python` covers collector, local server, scheduler, cloud behavior, and the place-name ledger with synthetic adapters.
+- `npm run verify -- --suite model` covers route, grid, destination calculations, and badminton day counts from `select`.
 
-Use existing selectors and actions in the harnesses. The refresh recipe toggles `#show-grid`, saves a name through `#label-form`, replaces its synthetic source file, and brings the page to the foreground. It reads `#history-stat`, `#visible-stat`, the controls and the saved name afterward. Public-update fixtures use `#update-map` and the same hint as `#running`; the Python suite proves the global cooldown and HTTP boundary with synthetic Actions responses.
+Use existing selectors and actions in the harnesses. The refresh recipe toggles `#show-grid`, saves a name through `#label-form`, replaces its synthetic source file, and brings the page to the foreground. A second page opened on that server reads the saved name after a `dataset.json` focus poll. The dataset file bytes stay unchanged. It reads `#history-stat`, `#visible-stat`, the controls and the saved name afterward. Public-update fixtures use `#update-map` and the same hint as `#running`; the Python suite proves the global cooldown and HTTP boundary with synthetic Actions responses.
 
 ## Evidence
 
