@@ -92,4 +92,8 @@ JSON Schema 负责形状和类型；`./run validate 文件路径` 另外检查�
 
 `public-ride-map` v1 可包含 `place_annotations`。它只接受 `labels` 和 `merges`，省略时分别为空对象和空数组。`labels` 以 `r_` 加 24 位小写十六进制的公开行程 ID 为键，名称必须按 ECMAScript `trim` 规则去掉首尾空白，长度为 1 至 40 个 Unicode 码点。`merges` 每组只包含 `anchorId` 和 `memberIds`，至少两个不同成员，锚点必须包含在成员中。名称数、合并组数和全部合并成员条目数各不超过 25,000。历史 ID 可以暂时不在当前轨迹中，多组合并可以有交集。
 
-字段存在时，浏览器统一使用发布者的名称与合并关系，即使其值为 `{}`。旧 localStorage 标注保留但不参与显示或统计。字段缺失的旧公开地图与原始 `ride-dataset` 仍使用本地标注，原始数据中的同名字段不授予发布权限。`public_dataset` 只从显式 `place_annotations` 参数加入标注，不从原始数据复制。
+磁盘上的 `place_annotations` 是发布副本。`public_dataset` 只从显式参数加入标注，不从原始 `ride-dataset` 复制同名字段，该字段也不发布合并。
+
+地图服务返回的正文可以把 `place_annotations.labels` 设为 `place-names.json` 的投影。投影保留尚未清除的发布名称，并采用访客保存的覆盖名称。`updated_at` 不变。本地 `ride-dataset` 的响应只有 `labels`，没有 `merges`，页面继续使用浏览器里的合并。公开文件已经带有 `place_annotations` 时，响应保留其中的 `merges`。省略 `merges` 时，响应补上空列表。公开文件原本没有该对象时，响应只加入 `labels`。页面见到公开格式和这个对象后，把省略的合并当作空列表。
+
+浏览器用响应里的 `labels` 显示名称，不读取浏览器中的旧名称。公开响应含有 `place_annotations` 时使用其中的合并。值为 `{}` 时名称和合并都为空，浏览器里的旧记录不会覆盖它们。没有该字段、且未经地图服务改写的旧公开文件，仍使用浏览器里的合并。

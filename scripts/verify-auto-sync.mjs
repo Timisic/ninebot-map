@@ -90,6 +90,7 @@ try {
   await page.locator('.place-button').first().click();
   await page.locator('#edit-place').click(); await page.locator('#place-label').fill('Synthetic saved label');
   await page.locator('#label-form button[type=submit]').click();
+  await page.waitForFunction(() => document.querySelector('.place-name')?.textContent === 'Synthetic saved label');
   await page.locator('.place-button').first().click();
   await page.locator('#edit-place').click();
   await page.locator('#place-label').fill('Same-dataset unsaved draft');

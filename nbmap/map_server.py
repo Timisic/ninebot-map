@@ -1,11 +1,13 @@
 import json
 import hashlib
+import re
 import threading
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from .dataset import validate_dataset
+from .place_names import MAX_PLACE_BODY, PlaceNameRejected, PlaceNameUnavailable, PlaceNames
 from .viewer_resources import ASSETS, WEB_ROOT, viewer_resources
 
 MAX_BYTES = 40 * 1024 * 1024
@@ -30,6 +32,7 @@ def create_server(dataset_path=None, port=0):
     if not isinstance(port, int) or not 0 <= port <= 65535:
         raise ValueError('端口必须在 0 到 65535 之间')
     dataset_path = Path(dataset_path).resolve() if dataset_path else None
+    names = PlaceNames.open(dataset_path) if dataset_path else None
     snapshot = read_map_dataset(dataset_path) if dataset_path else None
     dataset_lock = threading.Lock()
     revision = hashlib.sha256(snapshot).hexdigest() if snapshot else None
@@ -91,9 +94,17 @@ def create_server(dataset_path=None, port=0):
                 self._reply(403, b'Forbidden')
                 return
             raw_target = self.requestline.split()[1]
+            if raw_target == self.path == '/api/place-names':
+                self._reply(405, b'Method not allowed')
+                return
             if raw_target == self.path == '/dataset.json' and dataset_path:
-                content, etag = current_snapshot()
-                self._reply(200, content, 'application/json; charset=utf-8', etag)
+                content, _revision = current_snapshot()
+                try:
+                    served = names.overlay(content)
+                except ValueError:
+                    self._reply(503, b'Unavailable')
+                    return
+                self._reply(200, served.body, 'application/json; charset=utf-8', served.etag)
                 return
             resource = resources.get(raw_target) if raw_target == self.path else None
             if resource is None:
@@ -106,7 +117,45 @@ def create_server(dataset_path=None, port=0):
         def _unsupported(self):
             self._reply(405, b'Method not allowed')
 
-        do_POST = do_PUT = do_DELETE = do_PATCH = do_OPTIONS = do_TRACE = do_CONNECT = _unsupported
+        def _read_limited(self, limit):
+            lengths = self.headers.get_all('Content-Length')
+            if self.headers.get('Transfer-Encoding') or not lengths or len(lengths) != 1 or re.fullmatch(r'[0-9]+', lengths[0]) is None:
+                return None, 400
+            size = int(lengths[0])
+            if size > limit:
+                return None, 413
+            try:
+                self.connection.settimeout(5)
+                raw = self.rfile.read(size)
+            except OSError:
+                return None, 400
+            if len(raw) != size:
+                return None, 400
+            return raw, None
+
+        def do_POST(self):
+            if not self._valid_request():
+                self._reply(403, b'Forbidden')
+                return
+            if self.path != '/api/place-names' or names is None:
+                self._unsupported()
+                return
+            raw, status = self._read_limited(MAX_PLACE_BODY)
+            if status:
+                self._reply(status, ('名称太多。' if status == 413 else '名称无效。').encode())
+                return
+            try:
+                content, _revision = current_snapshot()
+                body = names.save(raw, content)
+            except PlaceNameRejected as error:
+                self._reply(error.status, error.public_message.encode())
+                return
+            except (PlaceNameUnavailable, OSError, ValueError):
+                self._reply(500, '名称没有保存，请重试。'.encode())
+                return
+            self._reply(200, body, 'application/json; charset=utf-8')
+
+        do_PUT = do_DELETE = do_PATCH = do_OPTIONS = do_TRACE = do_CONNECT = _unsupported
 
     server = ThreadingHTTPServer(('127.0.0.1', port), Handler)
     server.daemon_threads = True

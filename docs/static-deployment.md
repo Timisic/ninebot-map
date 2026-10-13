@@ -1,6 +1,6 @@
 # 静态地图部署
 
-Along 页面读取地图数据，并可通过指定服务器请求 GitHub Actions 更新。不提供导入、上传或远程命名接口。发布者可通过 `place_annotations` 统一发布名称和合并关系，所有设备使用同一份标注。没有该字段的旧文件仍使用访问者浏览器中的标注。
+Along 页面读取地图数据，并可通过指定服务器请求 GitHub Actions 更新。不提供导入或行程上传。同一来源的访客可以向正在打开的地图服务 `POST /api/place-names` 保存地点名称。服务返回的 `dataset.json` 包含这些名称。`site.place_annotations` 仍是发布时写入的名称与合并种子，也是唯一随地图发布的合并关系。`data/place-names.json` 在数据发布和资源部署后保留。
 
 ## 构建
 
@@ -22,12 +22,13 @@ Along 页面读取地图数据，并可通过指定服务器请求 GitHub Action
 - `current` 指向活动资源版本。
 - `assets/<SHA-256>/` 保留各版本的固定资源，独立于 `current`。
 - `data/dataset.json` 保存单独更新的公开地图数据。
+- `data/place-names.json` 与数据集放在同一目录，记录访客保存的地点名称。数据发布和资源部署不替换它。运行服务的用户必须能在该目录创建此文件。
 - `code/` 保存接收器、托管进程和更新代理，网页不能读取它。
 - `staging/` 接收初次部署包并核对清单。
 
-服务模板见 `templates/map-site.service`。它只监听 `127.0.0.1:8766`，只允许固定资源路径。模板使用 `--assets-root /home/ubuntu/hong/ninebot-map-site/assets` 读取持久资源。省略该选项时，使用网页根目录内的 `assets/`。版本资源要求完整的小写 SHA-256 和固定文件名，拒绝查询参数、目录穿越、网页数据及私有路径。解析后的文件必须位于资源根目录内。
+服务模板见 `templates/map-site.service`。它只监听 `127.0.0.1:8766`，只允许固定资源路径。模板使用 `--assets-root /home/ubuntu/hong/ninebot-map-site/assets` 读取持久资源。省略该选项时，使用网页根目录内的 `assets/`。版本资源要求完整的小写 SHA-256 和固定文件名，拒绝查询参数、目录穿越、网页数据及私有路径。解析后的文件必须位于资源根目录内。模板用 `ReadWritePaths` 放行 `data/`，因此 `ProtectHome=read-only` 下仍可创建 `data/place-names.json`。`data/` 必须在服务启动前存在。
 
-唯一可接收 POST 的路径是 `/api/update`，其他写入请求返回 405。`/` 和 `/index.html` 均可直接打开，目录浏览、会话、代码、令牌和更新数据库路径不可读取。
+可接收 POST 的路径是 `/api/update` 和 `/api/place-names`。其他写入请求返回 405。`/api/place-names` 只接受一个 JSON 对象，请求体上限为 1 MiB，`GET` 该路径返回 405。配置了更新 Origin 时，它使用与 `/api/update` 相同的来源检查。未配置更新 Origin 时，只拒绝 `Sec-Fetch-Site` 为 `cross-site` 的请求。保存名称不改变 `dataset.json` 的 `updated_at`。`publish_dataset` 仍拒绝比当前更旧的更新时间。`/` 和 `/index.html` 均可直接打开，目录浏览、会话、代码、令牌和更新数据库路径不可读取。
 
 资源部署先在 staging 核对每个文件的类型、相对路径和 SHA-256，再放入新 releases 目录。切换前，把本版本 `assets/<SHA-256>/` 完整复制到持久 `assets/` 目录。同名目录应核对现有字节并复用，不能覆盖成不同内容。最后原子切换 current。不要删除已发布的资源目录，旧页面仍可能请求旧版本的模块或图片。部署回滚同样保留这些目录。
 
@@ -35,7 +36,7 @@ Along 页面读取地图数据，并可通过指定服务器请求 GitHub Action
 
 ## 数据单独更新
 
-`receive-public-map.py --target <data/dataset.json>` 从标准输入读取单个公开地图 JSON，上限 40 MiB。它拒绝额外字段、统计不一致、越界坐标和比当前更旧的更新时间。验证通过后使用临时文件和原子替换发布。失败时保留已有文件，重复相同输入不改写。
+`receive-public-map.py --target <data/dataset.json>` 从标准输入读取单个公开地图 JSON，上限 40 MiB。它拒绝额外字段、统计不一致、越界坐标和比当前更旧的更新时间。验证通过后使用临时文件和原子替换发布。失败时保留已有文件，重复相同输入不改写。接收器只替换目标数据集，不读写旁边的 `place-names.json`。
 
 接收器不接受压缩包、命令、路径参数或源码作为标准输入。脚本路径和目标文件由管理员固定。将专用 SSH 公钥限制为该 forced command，并使用 OpenSSH restrict 禁止转发和交互会话。新增这项持续访问权限须事先取得具体授权。私钥由用户安全录入私有同步仓库的 `MAP_DEPLOY_KEY` Secret，Agent 不读取或输出实际私钥。
 

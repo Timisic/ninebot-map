@@ -1,5 +1,5 @@
 import { NATURE_TITLE } from './place-geography.mjs';
-import { readRideMap, mergePlaceGroups, renamePlace } from './model.mjs';
+import { readRideMap, mergePlaceGroups, savePlaceName } from './model.mjs';
 import { createRouteLayer, createBasemap } from './map-layer.mjs';
 import { icon } from './icons.mjs';
 import { installWheelZoom } from './wheel-zoom.mjs';
@@ -19,7 +19,7 @@ $('fit').title = '查看全部路线';
 $('update-map').replaceChildren(icon('refresh'), Object.assign(document.createElement('span'), { textContent: '更新' }));
 installWheelZoom(map);
 const routeLayer = createRouteLayer(map), markers = L.layerGroup().addTo(map);
-let state = { phase: 'loading', model: null, view: null, selected: null, editing: null, labels: {}, merges: [], merging: false, storageKey: null, placeCue: null };
+let state = { phase: 'loading', model: null, view: null, selected: null, editing: null, labels: {}, merges: [], merging: false, saving: false, storageKey: null, placeCue: null };
 const lifecycle = new AbortController();
 const placeCueDuration = 3000;
 let placeCueTimer = null;
@@ -117,7 +117,6 @@ function clearSelection() {
 }
 function choosePlace(id, fromMarker = false) {
   if (!state.view?.destinations.some(place => place.id === id)) return;
-  if (state.model.placeAnnotations !== null && state.selected === id) { clearSelection(); return; }
   if (fromMarker) setSidebar(true);
   cuePlace(id);
   if (state.selected !== id) { state.selected = id; state.editing = null; state.merging = false; }
@@ -131,10 +130,8 @@ function render() {
   const listScroll = $('places').scrollTop;
   const { model } = state;
   if (!model) return;
-  if (model.placeAnnotations !== null) { state.editing = null; state.merging = false; }
-  $('place-storage-note').hidden = model.placeAnnotations !== null;
-  $('edit-place').hidden = model.placeAnnotations !== null;
-  $('merge-place').hidden = model.placeAnnotations !== null;
+  if (model.publishedMerges !== null) state.merging = false;
+  $('merge-place').hidden = model.publishedMerges !== null;
   const view = state.view = model.select({ labels: state.labels, merges: state.merges });
   if (state.placeCue && (state.placeCue.datasetId !== model.datasetId || state.placeCue.expiresAt <= performance.now() || !view.destinations.some(place => place.id === state.placeCue.id))) clearPlaceCue();
   const selectedPlace = view.destinations.find(p => p.id === state.selected);
@@ -180,7 +177,7 @@ function render() {
   if (focusPlace) [...document.querySelectorAll(focusMarker ? '.destination-marker button' : '.place-button')].find(button => button.dataset.placeId === focusPlace)?.focus({ preventScroll: true });
   $('places-empty').hidden = view.destinations.length > 0;
   $('places-empty').textContent = '数据中没有符合范围的行程终点。';
-  document.querySelector('.place-detail').hidden = !selectedPlace || model.placeAnnotations !== null;
+  document.querySelector('.place-detail').hidden = !selectedPlace;
   $('selection-summary').hidden = !selectedPlace || state.editing === state.selected || state.merging;
   $('merge-form').hidden = !selectedPlace || !state.merging;
   $('selection-empty').hidden = !!selectedPlace;
@@ -204,21 +201,18 @@ async function hashText(text) {
   return [...new Uint8Array(digest)].map(n => n.toString(16).padStart(2, '0')).join('');
 }
 async function loadLabels(model) {
-  if (model.placeAnnotations !== null) return { ...model.placeAnnotations, storageKey: null, legacyStorageKey: null, labelNote: '' };
   const keys = await Promise.all(['unverified', 'wgs84'].map(async interpretation => {
     return 'ride-map-labels:' + await hashText(`${model.datasetId}|${interpretation}|destinations-fixed-anchor-100m-v1`);
   }));
   const storageKey = keys[0];
-  let labels = Object.create(null), merges = [];
+  const labels = { ...model.sharedLabels };
+  if (model.publishedMerges !== null) return { storageKey, labels, merges: model.publishedMerges, labelNote: '' };
+  let merges = [];
   try {
-    for (const key of keys.toReversed()) {
-      const saved = JSON.parse(localStorage.getItem(key) || '{}');
-      if (saved && typeof saved === 'object' && !Array.isArray(saved)) Object.assign(labels, Object.fromEntries(Object.entries(saved).filter(([, value]) => typeof value === 'string' && value.length <= 40)));
-    }
     const storedMerges = JSON.parse(localStorage.getItem(storageKey + ':merges') || '[]');
     if (Array.isArray(storedMerges)) merges = storedMerges.filter(group => group && typeof group.anchorId === 'string' && Array.isArray(group.memberIds) && group.memberIds.length <= 25000 && group.memberIds.every(id => typeof id === 'string'));
-  } catch { return { storageKey, legacyStorageKey: keys[1], labels, merges, labelNote: '本地存储不可用，名称仅保留到关闭页面。' }; }
-  return { storageKey, legacyStorageKey: keys[1], labels, merges, labelNote: '' };
+  } catch { merges = []; }
+  return { storageKey, labels, merges, labelNote: '' };
 }
 async function loadDataset(text, fitView = true) {
   if (state.phase === 'closed') return;
@@ -236,8 +230,7 @@ async function loadDataset(text, fitView = true) {
     const model = readRideMap(text, 'unverified');
     const saved = await loadLabels(model);
     if (version !== importVersion) return;
-    stopTiles(); state = { phase: 'ready', model, view: model.select({ labels: saved.labels, merges: saved.merges }), selected: null, editing: null, merging: false, placeCue: state.placeCue, ...saved };
-    if (model.placeAnnotations !== null) $('place-label').value = '';
+    stopTiles(); state = { phase: 'ready', model, view: model.select({ labels: saved.labels, merges: saved.merges }), selected: null, editing: null, merging: false, placeCue: state.placeCue, ...saved, saving: state.saving };
     $('label-note').textContent = saved.labelNote;
     for (const id of ['show-grid', 'basemap', 'fit']) $(id).disabled = false;
     const updatedAt = new Date(model.updatedAt);
@@ -263,7 +256,6 @@ $('show-grid').addEventListener('change', () => { $('cell-info').hidden = true; 
 $('clear-selection').addEventListener('click', clearSelection);
 $('close-places').addEventListener('click', () => { setSidebar(false); $('toggle-places').focus(); });
 $('edit-place').addEventListener('click', () => {
-  if (state.model?.placeAnnotations !== null) return;
   const place = state.view.destinations.find(item => item.id === state.selected);
   if (!place) return;
   state.editing = state.selected; $('place-label').value = placeName(place); $('label-note').textContent = '';
@@ -274,31 +266,49 @@ $('locate-place').addEventListener('click', () => {
   const place = state.view.destinations.find(item => item.id === state.selected);
   if (place) { cuePlace(place.id); render(); map.panTo(place.anchor, { animate: false }); }
 });
-$('label-form').addEventListener('submit', event => {
-  event.preventDefault(); if (!state.selected || state.model?.placeAnnotations !== null) return;
-  const label = $('place-label').value.trim();
-  const place = state.view.destinations.find(p => p.id === state.selected);
-  state.labels = renamePlace(place, label, state.labels, state.merges);
-  try { localStorage.setItem(state.storageKey, JSON.stringify(state.labels)); localStorage.removeItem(state.legacyStorageKey); $('label-note').textContent = '已保存在此浏览器。'; } catch { $('label-note').textContent = '无法保存到浏览器，名称仅本次有效。'; render(); return; }
-  state.editing = null; render(); $('edit-place').focus();
-});
-$('merge-place').addEventListener('click', () => { if (state.model?.placeAnnotations !== null) return; state.merging = true; render(); $('merge-target').focus(); });
-$('cancel-merge').addEventListener('click', () => { state.merging = false; render(); $('merge-place').focus(); });
-$('merge-form').addEventListener('submit', event => {
+$('label-form').addEventListener('submit', async event => {
   event.preventDefault();
-  if (state.model?.placeAnnotations !== null) return;
+  if (state.saving || !state.selected) return;
+  const place = state.view.destinations.find(item => item.id === state.selected);
+  if (!place) return;
+  state.saving = true;
+  try {
+    state.labels = await savePlaceName(place, $('place-label').value, state.labels, state.merges);
+    $('label-note').textContent = '已保存，其他打开此地图的人会看到。';
+    state.editing = null;
+    render();
+    $('edit-place').focus();
+  } catch (error) {
+    $('label-note').textContent = error.message;
+  } finally {
+    state.saving = false;
+  }
+});
+$('merge-place').addEventListener('click', () => { if (state.model?.publishedMerges !== null) return; state.merging = true; render(); $('merge-target').focus(); });
+$('cancel-merge').addEventListener('click', () => { state.merging = false; render(); $('merge-place').focus(); });
+$('merge-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  if (state.saving || state.model?.publishedMerges !== null) return;
   const source = state.view.destinations.find(place => place.id === state.selected);
   const target = state.view.destinations.find(place => place.id === $('merge-target').value);
   if (!source || !target || source.id === target.id) return;
   const merges = mergePlaceGroups(state.merges, source, target);
-  const label = target.named ? target.label : source.named ? source.label : null;
-  state.labels = renamePlace(target, label, state.labels, merges);
-  state.merges = merges; state.selected = target.id; state.merging = false; clearPlaceCue();
+  const label = target.named ? target.label : source.named ? source.label : '';
+  state.saving = true;
   try {
-    localStorage.setItem(state.storageKey + ':merges', JSON.stringify(merges));
-    localStorage.setItem(state.storageKey, JSON.stringify(state.labels));
-  } catch { showError('无法保存到浏览器，合并与名称仅本次有效。'); }
-  render(); $('edit-place').focus();
+    state.labels = await savePlaceName(target, label, state.labels, merges);
+    state.merges = merges;
+    state.selected = target.id;
+    state.merging = false;
+    try { localStorage.setItem(state.storageKey + ':merges', JSON.stringify(merges)); }
+    catch { showError('无法保存到浏览器，合并仅本次有效。'); }
+    render();
+    $('edit-place').focus();
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    state.saving = false;
+  }
 });
 function updateBasemap() {
   const enabled = $('basemap').checked;
@@ -316,7 +326,6 @@ function showCell(event) {
   const key = state.model.cellAt(event.latlng.lat, event.latlng.lng), count = state.view.passages.get(key) || 0;
   $('cell-info').hidden = false; $('cell-info').replaceChildren(Object.assign(document.createElement('strong'), {textContent: count}), '次行程经过这个区域');
 }
-map.on('click', () => { if (state.model?.placeAnnotations != null && state.selected) clearSelection(); });
 map.on('mousemove click', showCell); map.on('mouseout', () => { $('cell-info').hidden = true; });
 
 let updateState = { phase: 'unavailable', canRequest: false, requestedAt: null, nextAllowedAt: null, request: 'idle', timer: null };
@@ -453,11 +462,11 @@ async function refreshServer() {
     if (await loadDataset(text, false)) {
       if (state.model.datasetId === selection.datasetId && state.view.destinations.some(place => place.id === selection.selected)) {
         state.selected = selection.selected;
-        if (state.model.placeAnnotations === null) {
-          state.editing = selection.editing; state.merging = selection.merging; $('place-label').value = selection.draft;
-        } else $('place-label').value = '';
+        state.editing = selection.editing;
+        state.merging = state.model.publishedMerges === null && selection.merging;
+        $('place-label').value = selection.draft;
         render();
-        if (state.model.placeAnnotations === null) $('merge-target').value = selection.mergeTarget;
+        if (state.merging) $('merge-target').value = selection.mergeTarget;
       }
       serverRevision = nextRevision;
       if (wasOnline && state.model) { $('basemap').checked = true; updateBasemap(); }

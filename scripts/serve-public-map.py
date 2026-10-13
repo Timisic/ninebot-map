@@ -7,6 +7,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from nbmap.map_server import ASSETS, MAX_BYTES
+from nbmap.place_names import MAX_PLACE_BODY, PlaceNameRejected, PlaceNameUnavailable, PlaceNames
 from nbmap.viewer_resources import BUNDLE_HASH, IMMUTABLE_FILES
 from nbmap.public_map import validate_public
 from nbmap.public_updates import PublicUpdates
@@ -21,6 +22,7 @@ def create_server(root, port=8766, dataset_path=None, *, assets_root=None, updat
     assets_root = Path(assets_root).absolute() if assets_root else root / 'assets'
     dataset_path = Path(dataset_path).resolve() if dataset_path else root / 'dataset.json'
     validate_public(json.loads(dataset_path.read_bytes()))
+    names = PlaceNames.open(dataset_path)
     updates = updates or PublicUpdates(updates_config, updates_state, dataset_path)
     allowed = {('/index.html' if route == '/' else route): (file, mime) for route, (file, mime) in ASSETS.items()}
     allowed['/'] = ('index.html', 'text/html; charset=utf-8')
@@ -36,6 +38,9 @@ def create_server(root, port=8766, dataset_path=None, *, assets_root=None, updat
             raw_target = self.requestline.split()[1]
             if raw_target != self.path or '?' in raw_target or '#' in raw_target:
                 self.send_error(404)
+                return
+            if raw_target == '/api/place-names':
+                self.send_error(405)
                 return
             if raw_target == '/api/update':
                 state = updates.snapshot()
@@ -74,7 +79,15 @@ def create_server(root, port=8766, dataset_path=None, *, assets_root=None, updat
             except (OSError, ValueError):
                 self.send_error(503)
                 return
-            etag = '"' + hashlib.sha256(body).hexdigest() + '"'
+            if filename == 'dataset.json':
+                try:
+                    served = names.overlay(body)
+                except ValueError:
+                    self.send_error(503)
+                    return
+                body, etag = served.body, '"' + served.etag + '"'
+            else:
+                etag = '"' + hashlib.sha256(body).hexdigest() + '"'
             self.send_response(200)
             self.send_header('Content-Type', mime)
             self.send_header('Content-Length', str(len(body)))
@@ -101,7 +114,70 @@ def create_server(root, port=8766, dataset_path=None, *, assets_root=None, updat
             if self.command != 'HEAD':
                 self.wfile.write(body)
 
+        def _plain(self, status, message):
+            body = message.encode()
+            self.send_response(status)
+            self.send_header('Content-Type', 'text/plain; charset=utf-8')
+            self.send_header('Content-Length', str(len(body)))
+            self.send_header('Cache-Control', 'no-store')
+            self.send_header('X-Content-Type-Options', 'nosniff')
+            self.send_header('Referrer-Policy', 'strict-origin-when-cross-origin')
+            self.end_headers()
+            self.wfile.write(body)
+
+        def _place_name_origin_ok(self):
+            fetch_sites = self.headers.get_all('Sec-Fetch-Site', [])
+            if updates.allowed_origin is None:
+                return 'cross-site' not in fetch_sites
+            origins = self.headers.get_all('Origin', [])
+            if origins != [updates.allowed_origin]:
+                return False
+            return not fetch_sites or (len(fetch_sites) == 1 and fetch_sites[0] in ('same-origin', 'none'))
+
+        def place_names(self):
+            if not self._place_name_origin_ok():
+                self._plain(403, 'Forbidden')
+                return
+            if len(self.headers.get_all('Content-Type', [])) != 1 or self.headers.get_content_type() != 'application/json' or self.headers.get('Content-Encoding'):
+                self._plain(415, 'Unsupported media type')
+                return
+            lengths = self.headers.get_all('Content-Length', [])
+            if self.headers.get('Transfer-Encoding') or len(lengths) != 1 or not re.fullmatch(r'[0-9]+', lengths[0]):
+                self._plain(400, '名称无效。')
+                return
+            size = int(lengths[0])
+            if size > MAX_PLACE_BODY:
+                self._plain(413, '名称太多。')
+                return
+            try:
+                self.connection.settimeout(5)
+                raw = self.rfile.read(size)
+                if len(raw) != size:
+                    raise ValueError('short body')
+                with dataset_path.open('rb') as stream:
+                    dataset = stream.read(MAX_BYTES + 1)
+                if len(dataset) > MAX_BYTES:
+                    raise ValueError('oversized dataset')
+                body = names.save(raw, dataset)
+            except PlaceNameRejected as error:
+                self._plain(error.status, error.public_message)
+                return
+            except (PlaceNameUnavailable, OSError, ValueError, UnicodeError):
+                self._plain(500, '名称没有保存，请重试。')
+                return
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/json; charset=utf-8')
+            self.send_header('Content-Length', str(len(body)))
+            self.send_header('Cache-Control', 'no-store')
+            self.send_header('X-Content-Type-Options', 'nosniff')
+            self.send_header('Referrer-Policy', 'strict-origin-when-cross-origin')
+            self.end_headers()
+            self.wfile.write(body)
+
         def do_POST(self):
+            if self.path == '/api/place-names':
+                self.place_names()
+                return
             if self.path != '/api/update':
                 self.unsupported()
                 return
@@ -140,7 +216,7 @@ def create_server(root, port=8766, dataset_path=None, *, assets_root=None, updat
             else:
                 self.send_error(405)
 
-        do_PUT = do_DELETE = do_PATCH = do_OPTIONS = unsupported
+        do_PUT = do_DELETE = do_PATCH = do_OPTIONS = do_TRACE = do_CONNECT = unsupported
 
     class Server(ThreadingHTTPServer):
         def server_close(self):

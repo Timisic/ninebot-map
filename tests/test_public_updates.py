@@ -402,6 +402,51 @@ class PublicUpdateTests(unittest.TestCase):
             self.assertEqual(request(method='GET', body=None)[0], 200)
         self.assertEqual(len(self.github.calls), before)
 
+    def test_configured_origin_gates_place_names_like_update(self):
+        spec = importlib.util.spec_from_file_location('along_place_server', 'scripts/serve-public-map.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        site = export_site(self.source, self.root / 'public-names')
+        updates = self.broker()
+        server = module.create_server(site, 0, self.dataset_path, updates=updates)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(thread.join)
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        before = self.dataset_path.read_bytes()
+        updated_at = json.loads(before)['updated_at']
+        ride = 'r_' + 'd' * 24
+        payload = json.dumps({'rideIds': [ride], 'name': '球馆🏸'}).encode()
+
+        def call(headers, body=payload, method='POST', path='/api/place-names'):
+            client = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=5)
+            client.request(method, path, body=body, headers=headers)
+            response = client.getresponse()
+            result = response.status, response.read()
+            client.close()
+            return result
+
+        good = {'Origin': ORIGIN, 'Content-Type': 'application/json', 'Sec-Fetch-Site': 'same-origin'}
+        self.assertEqual(call({'Content-Type': 'application/json'})[0], 403)
+        self.assertEqual(call({'Origin': 'https://evil.invalid', 'Content-Type': 'application/json', 'Sec-Fetch-Site': 'same-origin'})[0], 403)
+        self.assertEqual(call({**good, 'Sec-Fetch-Site': 'cross-site'})[0], 403)
+        self.assertEqual(call({**good, 'Sec-Fetch-Site': 'same-site'})[0], 403)
+        self.assertEqual(call({'Origin': ORIGIN, 'Content-Type': 'text/plain'}, b'{}')[0], 415)
+        self.assertEqual(call(good, method='GET', body=None)[0], 405)
+        status, body = call(good)
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body)['labels'][ride], '球馆🏸')
+        client = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=5)
+        client.request('GET', '/dataset.json')
+        response = client.getresponse()
+        served = json.loads(response.read())
+        client.close()
+        self.assertEqual(served['place_annotations']['labels'][ride], '球馆🏸')
+        self.assertEqual(served['updated_at'], updated_at)
+        self.assertEqual(self.dataset_path.read_bytes(), before)
+        self.assertEqual(call(good, path='/dataset.json', body=b'{}')[0], 405)
+
     def test_http_missing_configuration_returns_frozen_contract(self):
         spec = importlib.util.spec_from_file_location('along_disabled_server', 'scripts/serve-public-map.py')
         module = importlib.util.module_from_spec(spec)
