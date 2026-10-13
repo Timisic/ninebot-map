@@ -16,6 +16,12 @@ from .viewer_resources import WEB_ROOT, viewer_resources
 
 FORMAT = 'public-ride-map'
 NAME_TRIM_CHARACTERS = '\u0009\u000a\u000b\u000c\u000d\u0020\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff'
+
+
+def stored_place_name(value):
+    if not isinstance(value, str) or value != value.strip(NAME_TRIM_CHARACTERS) or not 1 <= len(value) <= 40:
+        raise ValueError('公开地点名称无效')
+    return value
 SUMMARY_FIELDS = {'ride_count', 'total_distance_m', 'known_distance_m', 'missing_distance_count',
                   'reported_month_distance_m', 'map_ride_count', 'map_distance_m', 'map_point_count', 'map_exclusions'}
 
@@ -58,7 +64,15 @@ def validate_public(data):
         labels, merges = annotations.get('labels', {}), annotations.get('merges', [])
         valid_id = lambda value: isinstance(value, str) and re.fullmatch(r'r_[a-f0-9]{24}', value)
         require(isinstance(labels, dict) and len(labels) <= 25000, '公开地点名称超限或无效')
-        require(all(valid_id(key) and isinstance(value, str) and value == value.strip(NAME_TRIM_CHARACTERS) and 0 < len(value) <= 40 for key, value in labels.items()), '公开地点名称无效')
+        def label_ok(key, value):
+            if not (valid_id(key) and isinstance(value, str)):
+                return False
+            try:
+                stored_place_name(value)
+            except ValueError:
+                return False
+            return True
+        require(all(label_ok(key, value) for key, value in labels.items()), '公开地点名称无效')
         require(isinstance(merges, list) and len(merges) <= 25000, '公开地点合并超限或无效')
         member_count = 0
         for group in merges:

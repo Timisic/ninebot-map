@@ -1,3 +1,4 @@
+import hashlib
 import http.client
 import json
 import re
@@ -27,9 +28,9 @@ class MapServerTests(unittest.TestCase):
         self.server.server_close()
         self.thread.join()
 
-    def request(self, path='/', method='GET', headers=None):
+    def request(self, path='/', method='GET', headers=None, body=None):
         connection = http.client.HTTPConnection('127.0.0.1', self.server.server_port, timeout=3)
-        connection.request(method, path, headers=headers or {})
+        connection.request(method, path, body=body, headers=headers or {})
         response = connection.getresponse()
         result = response.status, dict(response.headers), response.read()
         connection.close()
@@ -87,8 +88,53 @@ class MapServerTests(unittest.TestCase):
     def test_unsupported_methods_and_head(self):
         for method in ['POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'TRACE', 'CONNECT']:
             self.assertEqual(self.request('/dataset.json', method)[0], 405)
+        self.assertEqual(self.request('/api/place-names')[0], 405)
         self.assertEqual(self.request('/', 'HEAD')[0], 200)
         self.assertEqual(self.request('/', 'HEAD')[2], b'')
+
+    def test_two_clients_share_a_place_name_without_rewriting_the_dataset(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'dataset.json'
+            path.write_bytes(FIXTURE.read_bytes())
+            before = path.read_bytes()
+            generated_at = json.loads(before)['generated_at']
+            server = create_server(path, 0)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                def exchange(method, target, body=None, headers=None):
+                    connection = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=3)
+                    connection.request(method, target, body=body, headers=headers or {})
+                    response = connection.getresponse()
+                    result = response.status, dict(response.headers), response.read()
+                    connection.close()
+                    return result
+                ride = 'r_' + 'ab' * 12
+                payload = json.dumps({'rideIds': [ride], 'name': '球馆🏸'}).encode()
+                status, headers, body = exchange('POST', '/api/place-names', payload, {'Content-Type': 'application/json'})
+                self.assertEqual(status, 200)
+                self.assertEqual(json.loads(body)['labels'][ride], '球馆🏸')
+                self.assertIn('球馆🏸'.encode(), body)
+                status, headers, body = exchange('GET', '/dataset.json')
+                served = json.loads(body)
+                self.assertEqual(served['place_annotations']['labels'][ride], '球馆🏸')
+                self.assertNotIn('merges', served['place_annotations'])
+                self.assertEqual(served['generated_at'], generated_at)
+                self.assertEqual(headers['ETag'], '"' + hashlib.sha256(body).hexdigest() + '"')
+                status, _headers, second = exchange('GET', '/dataset.json')
+                self.assertEqual(status, 200)
+                self.assertEqual(json.loads(second)['place_annotations']['labels'][ride], '球馆🏸')
+                self.assertEqual(path.read_bytes(), before)
+                self.assertEqual(exchange('POST', '/dataset.json', b'{}')[0], 405)
+                self.assertEqual(exchange('PUT', '/api/place-names')[0], 405)
+                self.assertEqual(exchange('POST', '/api/place-names', payload, {'Content-Type': 'application/json', 'Sec-Fetch-Site': 'cross-site'})[0], 403)
+                self.assertEqual(exchange('POST', '/api/place-names', json.dumps({'rideIds': [ride], 'name': ''}).encode(), {'Content-Type': 'application/json'})[0], 400)
+                self.assertEqual(exchange('POST', '/api/place-names', b'{}', {'Content-Type': 'application/json', 'Content-Length': str(1024 * 1024 + 1)})[0], 413)
+                self.assertEqual(path.read_bytes(), before)
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join()
 
     def test_running_server_reloads_valid_updates_and_retains_snapshot_on_invalid_update(self):
         with tempfile.TemporaryDirectory() as directory:

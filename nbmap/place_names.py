@@ -12,8 +12,8 @@ from pathlib import Path
 
 # Local datasets keep the ride id select() already uses. Public tracks use r_ plus 24 hex digits.
 _RIDE_ID = re.compile(r'(?:r_[a-f0-9]{24}|[A-Za-z0-9][A-Za-z0-9_-]{0,199})\Z')
-_NAME_TRIM = '\u0009\u000a\u000b\u000c\u000d\u0020\u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff'
 _MAX_KEYS = 25000
+MAX_PLACE_BODY = 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -43,9 +43,8 @@ class _Ledger:
 
 
 def _stored_place_name(value):
-    if not isinstance(value, str) or value != value.strip(_NAME_TRIM) or not 1 <= len(value) <= 40:
-        raise ValueError('公开地点名称无效')
-    return value
+    from .public_map import stored_place_name
+    return stored_place_name(value)
 
 
 def _ledger_path(dataset_path):

@@ -193,6 +193,49 @@ class PublicMapTests(unittest.TestCase):
             self.assertEqual(receipt['status'], 'published')
             self.assertEqual(json.loads(target.read_bytes())['updated_at'], newer['updated_at'])
 
+    def test_place_names_are_shared_without_an_update_token(self):
+        spec = importlib.util.spec_from_file_location('static_place_names', 'scripts/serve-public-map.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory() as directory:
+            site = export_site(self.dataset, Path(directory) / 'site')
+            dataset_path = site / 'dataset.json'
+            before = dataset_path.read_bytes()
+            updated_at = json.loads(before)['updated_at']
+            server = module.create_server(site, 0)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                def exchange(method, path, body=None, headers=None):
+                    client = http.client.HTTPConnection('127.0.0.1', server.server_port, timeout=5)
+                    client.request(method, path, body=body, headers=headers or {})
+                    response = client.getresponse()
+                    result = response.status, response.read()
+                    client.close()
+                    return result
+                ride = 'r_' + 'c' * 24
+                payload = json.dumps({'rideIds': [ride], 'name': '球馆🏸'}).encode()
+                headers = {'Content-Type': 'application/json'}
+                self.assertEqual(exchange('GET', '/api/place-names')[0], 405)
+                self.assertEqual(exchange('TRACE', '/api/place-names')[0], 405)
+                self.assertEqual(exchange('POST', '/dataset.json', b'{}', headers)[0], 405)
+                self.assertEqual(exchange('POST', '/api/place-names', payload, {**headers, 'Sec-Fetch-Site': 'cross-site'})[0], 403)
+                status, body = exchange('POST', '/api/place-names', payload, {**headers, 'Sec-Fetch-Site': 'same-site'})
+                self.assertEqual(status, 200)
+                self.assertEqual(json.loads(body)['labels'][ride], '球馆🏸')
+                self.assertIn('球馆🏸'.encode(), body)
+                status, body = exchange('GET', '/dataset.json')
+                served = json.loads(body)
+                self.assertEqual(status, 200)
+                self.assertEqual(served['place_annotations']['labels'][ride], '球馆🏸')
+                self.assertEqual(served['updated_at'], updated_at)
+                self.assertEqual(dataset_path.read_bytes(), before)
+                self.assertEqual(exchange('POST', '/api/place-names', json.dumps({'rideIds': [ride], 'name': ''}).encode(), headers)[0], 400)
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join()
+
     def test_loopback_static_server_allows_only_get_head_and_exported_paths(self):
         spec = importlib.util.spec_from_file_location('static_map_server', 'scripts/serve-public-map.py')
         module = importlib.util.module_from_spec(spec)
@@ -225,7 +268,7 @@ class PublicMapTests(unittest.TestCase):
                     self.assertEqual(asset[1]['Cache-Control'], 'public, max-age=31536000, immutable')
                 for path in ['/upload', '/import', '/.private/tokens.json', '/dataset.lock', '/data/', '/scripts/']:
                     self.assertEqual(request(path)[0], 404)
-                for method in ['POST', 'PUT', 'PATCH', 'DELETE']:
+                for method in ['POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'TRACE', 'CONNECT']:
                     self.assertEqual(request('/dataset.json', method)[0], 405)
                 replacement = export_site(self.dataset, Path(directory) / 'replacement')
                 (replacement / 'styles.css').write_text('body { color: red; }')
