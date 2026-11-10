@@ -43,6 +43,8 @@ class ProtocolTests(unittest.TestCase):
                 body = json.loads(request.data)
                 if path == api.PATH_PASSPORT_LOGIN:
                     self.assertEqual(body["password"], "synthetic-password")
+                else:
+                    self.assertEqual(sorted(body), ["access_token", "device", "refresh_token"])
                 return Response({"resultCode": "90000", "resultDesc": "success", "data": {
                     "access_token": "synthetic-access", "refresh_token": "synthetic-refresh",
                     "uuid": "synthetic-uuid", "accessTokenValidity": int(time.time() * 1000) + 3600000}})

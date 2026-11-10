@@ -186,14 +186,14 @@ def parse_passport_tokens(resp, username, area_code="86"):
 
 
 def passport_refresh(tokens: dict, base=PASSPORT_BASE) -> dict:
-    """token 过期刷新（POST /v3/user/refresh）"""
+    """token 过期刷新（POST /v3/user/refresh）；2026-11-10 实测 camelCase 字段返回 90002，snake_case 成功。"""
     ts = int(time.time() * 1000)
-    body = {"accessToken": tokens["access_token"], "device": "ANDROID",
-            "refreshToken": tokens["refresh_token"]}
+    body = {"access_token": tokens["access_token"], "device": "ANDROID",
+            "refresh_token": tokens["refresh_token"]}
     sign_params = {
-        "accessToken": body["accessToken"], "app_version": APP_VERSION, "device": "ANDROID",
+        "access_token": body["access_token"], "app_version": APP_VERSION, "device": "ANDROID",
         "os": "Android", "os_language": "zh-hans-cn", "os_version": OS_VERSION,
-        "refreshToken": body["refreshToken"], "timestamp": str(ts), "url": PATH_PASSPORT_REFRESH,
+        "refresh_token": body["refresh_token"], "timestamp": str(ts), "url": PATH_PASSPORT_REFRESH,
     }
     headers = {
         "Timestamp": str(ts),
