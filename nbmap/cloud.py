@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -191,9 +192,14 @@ def publish_site_data(root, dataset, destination, updated_at):
         key_path, hosts_path = Path(directory) / 'identity', Path(directory) / 'known_hosts'
         write_text(key_path, key.replace('\r\n', '\n').strip() + '\n')
         write_text(hosts_path, destination['known_hosts'].strip() + '\n')
-        result = command(['ssh', '-T', '-i', str(key_path), '-p', str(port), '-o', 'IdentitiesOnly=yes', '-o', 'BatchMode=yes',
-                 '-o', 'StrictHostKeyChecking=yes', '-o', f'UserKnownHostsFile={hosts_path}',
-                 f'{user}@{host}', 'publish-map'], data=body, timeout=120, check=False)
+        # ssh exits 255 on connection failure; cross-border links drop intermittently and publish-map is idempotent.
+        for attempt in range(3):
+            result = command(['ssh', '-T', '-i', str(key_path), '-p', str(port), '-o', 'IdentitiesOnly=yes', '-o', 'BatchMode=yes',
+                     '-o', 'ConnectTimeout=20', '-o', 'StrictHostKeyChecking=yes', '-o', f'UserKnownHostsFile={hosts_path}',
+                     f'{user}@{host}', 'publish-map'], data=body, timeout=120, check=False)
+            if result.returncode != 255 or attempt == 2:
+                break
+            time.sleep(5 * (attempt + 1))
         if result.returncode:
             raise CommandFailure(['ssh', '-T'], result)
         prefix = 'Public map receipt: '

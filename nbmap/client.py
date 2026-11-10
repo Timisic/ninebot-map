@@ -59,7 +59,14 @@ class Client:
 
     def _call(self, stage, fn, *args, secrets=(), **kwargs):
         try:
-            return fn(*args, **kwargs)
+            # Ninebot hosts often reset the first cross-border connection; no response means a retry is safe.
+            for attempt in range(3):
+                try:
+                    return fn(*args, **kwargs)
+                except (urllib.error.URLError, TimeoutError, ConnectionError) as exc:
+                    if isinstance(exc, urllib.error.HTTPError) or attempt == 2:
+                        raise
+                    time.sleep(2 ** attempt)
         except UserFacingError:
             raise
         except Exception as exc:
@@ -115,15 +122,9 @@ class Client:
 
     def _read(self, fn, *args, **kwargs):
         self.session()
-        for attempt in range(3):
-            time.sleep(max(0, self.interval - (time.monotonic() - self.last_call)))
-            self.last_call = time.monotonic()
-            try:
-                return fn(self.tokens, self.device_id, *args, **kwargs)
-            except (urllib.error.URLError, TimeoutError) as exc:
-                if isinstance(exc, urllib.error.HTTPError) or attempt == 2:
-                    raise
-                time.sleep(2 ** attempt)
+        time.sleep(max(0, self.interval - (time.monotonic() - self.last_call)))
+        self.last_call = time.monotonic()
+        return fn(self.tokens, self.device_id, *args, **kwargs)
 
     def vehicles(self):
         return self._call("vehicles", self._read, api.vehicles)
