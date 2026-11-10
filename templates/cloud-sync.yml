@@ -48,7 +48,7 @@ jobs:
   sync:
     needs: due
     if: needs.due.outputs.due == 'true'
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

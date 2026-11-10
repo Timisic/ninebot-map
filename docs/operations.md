@@ -8,7 +8,7 @@
 | 独立私有 GitHub 仓库 | Actions 定期采集，持久保存加密档案 | `state` 分支的 `state.enc` |
 | 用户指定的公开仓库 | 展示持续更新的无底图轨迹图片 | PNG 和 README 图片块 |
 
-骑行采集只由私有同步仓库的 GitHub Actions 执行：工作流 `Private ride sync`（`.github/workflows/sync.yml`，由 `templates/cloud-sync.yml` 复制），`cron: '17 2 * * *'`，采集 job 运行在 `macos-latest`。公开仓库 `Timisic/ninebot-map` 只放代码、文档和轨迹 PNG，不保存骑行档案。本机只登录、首次采集、下载档案和查看地图，不再定时采集。
+骑行采集只由私有同步仓库的 GitHub Actions 执行：工作流 `Private ride sync`（`.github/workflows/sync.yml`，由 `templates/cloud-sync.yml` 复制），`cron: '17 2 * * *'`，采集 job 运行在 `ubuntu-latest`；macOS 托管运行器容量不足时会排队后被取消，2026-11-10 起不再使用。公开仓库 `Timisic/ninebot-map` 只放代码、文档和轨迹 PNG，不保存骑行档案。本机只登录、首次采集、下载档案和查看地图，不再定时采集。
 
 `./run cloud install` 配置私有同步仓库。默认连续间隔为 10 天，每天北京时间 10:17 左右检查到期时间，GitHub Actions 可能延迟。采集成功更新成功时钟；图片发布重试保留该时钟。`./run cloud status` 查看工作流、采集与图片发布状态。GitHub 运行器访问九号 passport 接口和国内静态服务器时，首个连接常被对端重置；九号请求在无响应的连接错误上最多重试 3 次，网站 SSH 发布在退出码 255 时最多重试 3 次。访问令牌约 30 天过期，过期后云端执行会先自动刷新令牌并保存到加密档案。刷新请求体使用 snake_case 的 `access_token` 和 `refresh_token`；2026-11-10 实测 camelCase 字段会被九号以 `90002 args missing` 拒绝。刷新令牌本身失效时，才需要在本机运行 `./run login` 并用 `./run cloud credentials` 更新云端会话。
 
