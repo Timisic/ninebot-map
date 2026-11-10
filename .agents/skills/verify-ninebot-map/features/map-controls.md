@@ -16,6 +16,7 @@ A user zooms around the pointer and toggles road tiles over unchanged raw coordi
 - `route-visibility` checks one, two and six routes in both themes at zooms 10, 13 and 16.
 - `raw-coordinate-display` ignores legacy CRS controls and keeps points unchanged.
 - `basemap-toggle` enables or removes road tiles without moving routes.
+- `basemap-mobile` uses an iPhone 13 Chrome simulation with touch and DPR 3: no requests before opt-in, tap to enable, complete image decoding, off/on recovery, unchanged map position and no page errors. This is not a real iPhone or Safari check.
 
 ## How to get to it (user POV)
 

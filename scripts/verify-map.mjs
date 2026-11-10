@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import fs from 'node:fs/promises';
 import net from 'node:net';
 import path from 'node:path';
-import { chromium } from 'playwright';
+import { chromium, devices } from 'playwright';
 import { makeDataset } from '../tests/map-fixture.mjs';
 async function selectTheme(page, preference) {
   await page.locator('#theme-toggle').click();
@@ -326,12 +326,52 @@ try {
   assert.ok(panelBox.height <= 960 && panelBox.height > 600);
 
 
-  for (const dpr of [1, 2]) {
-    const retinaContext = await browser.newContext({ viewport: {width: 1200, height: 800}, deviceScaleFactor: dpr, colorScheme: 'dark' });
+  const basemapDevices = [
+    { name: 'desktop-1', dpr: 1, options: { viewport: { width: 1200, height: 800 }, deviceScaleFactor: 1 } },
+    { name: 'desktop-2', dpr: 2, options: { viewport: { width: 1200, height: 800 }, deviceScaleFactor: 2 } },
+    { name: 'iphone-13-simulation', dpr: 3, options: devices['iPhone 13'], touch: true },
+  ];
+  for (const { name, dpr, options, touch } of basemapDevices) {
+    const retinaContext = await browser.newContext({ ...options, colorScheme: 'dark' });
+    const tileRequests = [], deviceErrors = [];
+    retinaContext.on('request', request => { if (request.url().startsWith('https://tile.openstreetmap.org/')) tileRequests.push(request.url()); });
     await retinaContext.route('https://tile.openstreetmap.org/**', route => route.fulfill({status:200, contentType:'image/png', headers: {'access-control-allow-origin':'*'}, body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jGMsAAAAASUVORK5CYII=', 'base64')}));
     const retinaPage = await retinaContext.newPage(); retinaPage.setDefaultTimeout(15000);
-    await retinaPage.goto(url + '#basemap=osm');
-    await retinaPage.waitForFunction(() => document.querySelector('img.leaflet-tile-loaded'));
+    retinaPage.on('pageerror', error => deviceErrors.push(error.message));
+    await retinaPage.goto(url + (touch ? '' : '#basemap=osm'));
+    if (touch) {
+      await retinaPage.waitForFunction(() => !document.querySelector('#basemap').disabled);
+      assert.equal(await retinaPage.locator('#basemap').isChecked(), false);
+      assert.deepEqual(tileRequests, [], 'The mobile map must not request tiles before opt-in.');
+      const rawView = await retinaPage.locator('.leaflet-map-pane').getAttribute('style');
+      await retinaPage.locator('#map-options > summary').tap();
+      await retinaPage.locator('#basemap').tap();
+      assert.equal(await retinaPage.locator('#basemap').isChecked(), true);
+      assert.equal(await retinaPage.locator('.leaflet-map-pane').getAttribute('style'), rawView);
+    }
+    await retinaPage.waitForFunction(() => {
+      const images = [...document.querySelectorAll('img.leaflet-tile')];
+      return images.length > 0 && images.every(image => image.classList.contains('leaflet-tile-loaded') && image.naturalWidth > 0);
+    });
+    if (touch) {
+      assert.equal(await retinaPage.evaluate(() => L.Browser.mobile && L.Browser.retina && navigator.maxTouchPoints > 0), true);
+      const rawView = await retinaPage.locator('.leaflet-map-pane').getAttribute('style');
+      const requestsBeforeOff = tileRequests.length;
+      await retinaPage.locator('#basemap').tap();
+      assert.equal(await retinaPage.locator('img.leaflet-tile').count(), 0);
+      assert.equal(await retinaPage.locator('#basemap').isChecked(), false);
+      assert.equal(await retinaPage.locator('.leaflet-map-pane').getAttribute('style'), rawView);
+      assert.equal(tileRequests.length, requestsBeforeOff);
+      await retinaPage.locator('#basemap').tap();
+      await retinaPage.waitForFunction(() => {
+        const images = [...document.querySelectorAll('img.leaflet-tile')];
+        return images.length > 0 && images.every(image => image.classList.contains('leaflet-tile-loaded') && image.naturalWidth > 0);
+      });
+      assert.equal(await retinaPage.locator('.leaflet-map-pane').getAttribute('style'), rawView);
+      assert.equal(await retinaPage.locator('#error').isVisible(), false);
+      if (process.env.MAP_SCREENSHOTS) await retinaPage.screenshot({ path: `${process.env.MAP_SCREENSHOTS}/basemap-${name}.png` });
+      await retinaPage.locator('#map-options > summary').tap();
+    }
     const scaling = await retinaPage.locator('img.leaflet-tile-loaded').first().evaluate(e => ({width:e.getBoundingClientRect().width, nativeWidth:parseFloat(e.style.width), filter:getComputedStyle(e.closest(".basemap-tiles")).filter}));
     assert.equal(scaling.nativeWidth, dpr === 1 ? 256 : 128);
     assert.ok(scaling.width / scaling.nativeWidth >= .70 && scaling.width / scaling.nativeWidth <= 1.42, JSON.stringify({ dpr, ...scaling }));
@@ -356,6 +396,7 @@ try {
       await retinaPage.locator('.leaflet-control-zoom-in').click();
       assert.equal(await retinaPage.locator('.leaflet-control-zoom-in').getAttribute('aria-disabled'), 'true');
     }
+    assert.deepEqual(deviceErrors, [], name);
     await retinaContext.close();
   }
 
